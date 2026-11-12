@@ -67,3 +67,25 @@ verification/reset links print to the server console — fine for local dev only
 
 **Google login button missing?**
 Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`; it appears automatically.
+
+## Hosting & deployment
+
+**Where is the game hosted?**
+Two places: a static arcade on GitHub Pages (landing + games, per-browser local
+leaderboard) and the full app on Render (shared leaderboard, accounts, rewards) —
+see the Deploy button in the README.
+
+**Why did the leaderboard on Render reset?**
+The Render free plan has an ephemeral filesystem: every deploy/restart/spin-down
+wipes the SQLite file. The schema is re-created automatically at boot, so the site
+keeps working. To keep data, upgrade the service to a paid plan and attach the
+disk described in `render.yaml`.
+
+**Why is the first request after idle so slow?**
+Free Render services sleep after 15 minutes without traffic and take ~1 minute to
+spin back up. A free uptime monitor pinging `/api/health` every 10 minutes avoids
+most sleep periods.
+
+**The images 404 on GitHub Pages but work locally?**
+That was a bug fixed in 0.4.1 — asset paths must go through `assetUrl()`. Report
+it if it reappears after adding new art.

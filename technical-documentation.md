@@ -103,3 +103,24 @@ matching, fingerprint stability, challenge determinism).
   emails print to the server console (dev only).
 - **Google login:** set `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET`; button appears automatically.
 - **Env vars:** see `.env.example`.
+
+## Deployment
+
+Two supported targets share one codebase:
+
+- **Render (full app):** `render.yaml` blueprint + `Dockerfile` (oven/bun, Next
+  standalone, Prisma/SQLite at `file:/data/brutal.db`). Boot sequence in
+  `scripts/docker-start.sh`: `prisma db push` (schema sync, idempotent) → optional
+  admin seed (`ADMIN_EMAIL`/`ADMIN_PASSWORD`) → standalone server. Health probe:
+  `GET /api/health` (checks SQLite with `SELECT 1`). `APP_URL` falls back to
+  Render's injected `RENDER_EXTERNAL_URL`. Free plan = ephemeral filesystem +
+  15-min spin-down; persistence requires a paid instance + the commented `disk:`
+  block in `render.yaml`.
+- **GitHub Pages (static arcade):** `STATIC_EXPORT=1 NEXT_PUBLIC_BASE_PATH=/repo`
+  build; server-only routes are stripped first (runbook in README). The board
+  client falls back to a per-browser localStorage leaderboard.
+
+**Rule:** every reference to a file in `/public` (JSX, canvas, metadata) must be
+base-path aware — `assetUrl()` from `src/lib/assets.ts`, or inline
+`process.env.NEXT_PUBLIC_BASE_PATH` in the engines. Root-absolute paths 404 on
+the Pages sub-path build (bug fixed in 0.4.1).

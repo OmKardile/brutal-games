@@ -81,3 +81,29 @@ Backups use `VACUUM INTO` which is safe on a hot database and checkpoints WAL.
 `bun test` (zero new deps). Payout math is pure functions. Ledger tests push the real
 schema to a temp SQLite file and run the actual award/void code paths, so idempotency
 and reversal semantics are tested against the same Prisma client used in production.
+
+## ADR-013 — Render as the primary deployment target
+
+Date: 2026-11-13 · Status: accepted
+
+**Context.** The app needs API routes + a filesystem database, so static hosts
+(GitHub Pages) can only serve the arcade without leaderboards/accounts. The
+GitHub Pages attempt also surfaced a class of bugs: root-absolute asset paths
+404 under a sub-path basePath.
+
+**Decision.**
+1. Deploy the full app to Render via a blueprint (`render.yaml` + `Dockerfile`,
+   Bun runtime) — one-click for a public repo, no server config to maintain.
+2. Accept the free plan's trade-offs: ephemeral SQLite (auto-recreated at boot)
+   and 15-min spin-down; document both, and ship the paid `disk:` block as the
+   explicit persistence upgrade path.
+3. Keep GitHub Pages as a secondary static arcade via `STATIC_EXPORT=1` builds,
+   with the local-board fallback.
+4. All public-asset references must be base-path aware (`assetUrl()`), enforced
+   by convention (0.4.1 fixed every violation).
+
+**Consequences.** Free-tier data loss on every deploy is accepted for v1 — the
+games remain fully playable and the board degrades to per-browser local mode
+when the API is absent. Persistent leaderboards require the paid disk. The
+workflow file cannot be committed with the current PAT (no `workflow` scope), so
+Pages deploys stay manual (runbook in README).
