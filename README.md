@@ -35,11 +35,25 @@ Admin console: `/admin` (ADMIN role required). Rewards are **disabled by default
 
 ## Deployment
 
-**Static (GitHub Pages — included).** A GitHub Actions workflow (`.github/workflows/deploy-pages.yml`)
-builds the public arcade (landing + both games) as a static site and deploys it on every push to
-`main`. Server-only routes (auth, rewards, admin, the leaderboard API) are stripped from that
-build; the games automatically fall back to a per-browser local leaderboard. Enable Pages once:
-repo → Settings → Pages → Build and deployment → Source: **GitHub Actions**.
+**Live static site (GitHub Pages).** The public arcade (landing + both games) is deployed
+from the `gh-pages` branch of this repo: https://omkardile.github.io/brutal-games/ —
+server-only routes (auth, rewards, admin, the leaderboard API) are excluded from that
+build; the games automatically fall back to a per-browser local leaderboard. To redeploy:
+
+```bash
+# build the static site from a clean tree:
+cp -a src src-tmp
+rm -rf src/app/api src/app/admin src/app/login src/app/signup \
+       src/app/forgot-password src/app/reset-password src/app/verify-email src/app/rewards
+STATIC_EXPORT=1 NEXT_PUBLIC_BASE_PATH=/brutal-games bunx next build
+rm -rf src && mv src-tmp src          # restore the full source
+touch out/.nojekyll
+# then commit the contents of out/ to the gh-pages branch and push
+```
+
+(A `deploy-pages.yml` workflow that automates exactly this on every push to `main` ships with
+the source; committing workflow files needs a token with the `workflow` scope, or add it via
+the GitHub web UI. Pages settings: Source *Deploy from a branch* → `gh-pages`.)
 
 **Full app (leaderboard + auth + rewards).** Any Node/Bun host works (Render, Railway, Fly,
 VPS + Caddy…). `bun install && bun run db:push && bun run build && bun run start` with the env
