@@ -1,0 +1,265 @@
+// BRUTAL // ARENA — Prisma schema (SQLite)
+//
+// Money is ALWAYS stored as int minor units (paise, INR). Never floats.
+// Day/month boundaries for rewards are Asia/Kolkata (IST) — see decisions.md.
+// The PointEvent ledger is append-only: rows are never updated or deleted;
+// corrections are new rows with negative points linked via reversalOfId.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------------------------------------------ game (existing)
+
+model HighScore {
+  id        String   @id @default(cuid())
+  name      String
+  score     Int
+  wave      Int
+  kills     Int
+  // which game the run belongs to: "arena" (wave shooter) | "stack" (tower stacker)
+  game      String   @default("arena")
+  createdAt DateTime @default(now())
+
+  @@index([score])
+  @@index([game, score])
+}
+
+// ------------------------------------------------------------------ identity
+
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  emailVerified   DateTime? // null until the verification link is clicked
+  passwordHash    String? // scrypt; null only if/when OAuth-only accounts exist
+  name            String?
+  role            String    @default("PLAYER") // PLAYER | ADMIN
+  status          String    @default("ACTIVE") // ACTIVE | FROZEN
+  adultDeclaredAt DateTime? // 18+ declaration; null = cannot earn or request payouts
+  upiId           String? // format-validated UPI id
+  upiUpdatedAt    DateTime?
+  lastLoginAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  sessions        Session[]
+  emailTokens     EmailToken[]
+  pointEvents     PointEvent[]
+  dailyActivities DailyActivity[]
+  playSessions    PlaySession[]
+  payoutRequests  PayoutRequest[]
+  fraudFlags      FraudFlag[]
+  devices         DeviceFingerprint[]
+  distributions   PoolDistribution[]
+}
+
+// Lightweight own-session approach (no next-auth) — see decisions.md.
+// Cookie carries a random token; only its sha256 hash is stored here.
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// One-time tokens for email verification and password reset.
+model EmailToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  type      String // VERIFY_EMAIL | RESET_PASSWORD
+  expiresAt DateTime
+  usedAt    DateTime? // set when consumed; a token works exactly once
+  createdAt DateTime  @default(now())
+
+  @@index([userId, type])
+}
+
+// ------------------------------------------------------------------ rewards ledger
+
+// Append-only. `points` is positive for awards, negative for reversals/voids.
+// `idempotencyKey` is unique across the table: replayed requests are no-ops.
+// A reversal row points at the row it reverses; one reversal per original max.
+model PointEvent {
+  id             String    @id @default(cuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  points         Int
+  reason         String // PLAY_TIME | LOGIN_STREAK | RUN_COMPLETION | DAILY_CHALLENGE | ADMIN_VOID
+  idempotencyKey String    @unique
+  note           String?
+  meta           String? // JSON string (e.g. wave reached, challenge id)
+  reversalOfId   String?   @unique
+  createdAt      DateTime  @default(now())
+
+  original PointEvent?  @relation("Reversal", fields: [reversalOfId], references: [id])
+  reversals PointEvent[] @relation("Reversal")
+
+  @@index([userId, createdAt])
+  @@index([reason, createdAt])
+}
+
+// Per-user per-day rollup (IST dates, 'YYYY-MM-DD'). Enforces the daily point cap.
+model DailyActivity {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date           String // 'YYYY-MM-DD' in Asia/Kolkata
+  pointsEarned   Int      @default(0)
+  heartbeats     Int      @default(0)
+  activitySeconds Int     @default(0)
+  streakCounted  Boolean  @default(false) // login-streak points already awarded for this date
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([userId, date])
+  @@index([date])
+}
+
+// A play session is opened by the client when a run starts; the server returns
+// a signed token. Heartbeats must present this token. Server timestamps only.
+model PlaySession {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique
+  startedAt  DateTime  @default(now())
+  lastBeatAt DateTime?
+  endedAt    DateTime?
+  endedReason String?  // RUN_END | EXPIRED | ABORTED
+  beats      Int       @default(0)
+  ip         String?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId, startedAt])
+}
+
+// ------------------------------------------------------------------ monthly pools
+
+// Admin enters net INR ad revenue (paise) for a month, previews the
+// distribution, then locks. After LOCKED the snapshot is immutable.
+model MonthlyPool {
+  id               String    @id @default(cuid())
+  month            String    @unique // 'YYYY-MM' (IST)
+  netRevenueMinor  Int // paise
+  sharePercent     Int       @default(30) // % of net revenue -> pool, snapshotted at entry
+  poolAmountMinor  Int       @default(0)
+  totalValidPoints Int       @default(0)
+  leftoverMinor    Int       @default(0) // money left when per-player caps clamp shares
+  voidedMinor      Int       @default(0) // freed by post-lock rejections (fraud)
+  status           String    @default("DRAFT") // DRAFT | LOCKED
+  enteredBy        String? // admin user id
+  lockedAt         DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  distributions PoolDistribution[]
+}
+
+// Per-user snapshot taken when a pool is locked. Never recomputed.
+model PoolDistribution {
+  id              String   @id @default(cuid())
+  poolId          String
+  pool            MonthlyPool @relation(fields: [poolId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  points          Int
+  rawShareMinor   Int // pool × points / totalPoints, before cap
+  cappedShareMinor Int // after per-player cap
+  capped          Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  @@unique([poolId, userId])
+}
+
+// v1 payouts are manual: request → (hold period) → admin approve/reject →
+// admin marks paid with a transaction reference. No automated payments.
+model PayoutRequest {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amountMinor     Int // paise
+  upiId           String // snapshot at request time
+  status          String    @default("PENDING") // PENDING | APPROVED | REJECTED | PAID
+  holdUntil       DateTime? // requestedAt + hold period; approve blocked before this
+  requestedAt     DateTime  @default(now())
+  reviewedBy      String? // admin user id
+  reviewedAt      DateTime?
+  rejectedReason  String?
+  paidAt          DateTime?
+  transactionRef  String?
+  createdAt       DateTime  @default(now())
+
+  @@index([status, requestedAt])
+  @@index([userId, requestedAt])
+}
+
+// ------------------------------------------------------------------ anti-fraud
+
+// Flags land in a manual review queue; nothing is auto-paid or auto-frozen.
+model FraudFlag {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type       String // DUPLICATE_DEVICE | DUPLICATE_IP | VPN_DATACENTER | HEADLESS_SUSPECT | ANOMALY | MANUAL
+  severity   String    @default("LOW") // LOW | MEDIUM | HIGH
+  status     String    @default("OPEN") // OPEN | REVIEWING | DISMISSED | CONFIRMED
+  details    String? // JSON string (ips, fingerprints, signal values)
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
+  resolvedBy String? // admin user id
+
+  @@index([status, createdAt])
+  @@index([userId, createdAt])
+}
+
+// Best-effort device identity. Same fingerprint on several accounts or many
+// accounts sharing one IP raises a flag for review (never auto-freezes).
+model DeviceFingerprint {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fingerprint  String // sha256 of collected client signals
+  ip           String? // last IP seen (disclosed on /privacy)
+  userAgent    String?
+  firstSeenAt  DateTime @default(now())
+  lastSeenAt   DateTime @updatedAt
+
+  @@unique([fingerprint, userId])
+  @@index([fingerprint])
+  @@index([userId])
+}
+
+// ------------------------------------------------------------------ config
+
+// Key-value store for reward settings. Seeded from defaults in code.
+// Keys (see src/lib/rewards/config.ts):
+//   REWARDS_ENABLED     master flag, default false
+//   SHARE_PERCENT       default 30
+//   PAYOUT_CAP_MINOR    per-player monthly payout cap (paise)
+//   MIN_PAYOUT_MINOR    minimum payout threshold (paise); below carries over
+//   DAILY_POINT_CAP     per-player daily point cap
+//   HEARTBEAT_INTERVAL_SEC  default 30
+//   HEARTBEAT_POINTS    points per validated heartbeat, default 1
+//   STREAK_BASE / STREAK_MAX  daily login streak points
+//   HOLD_PERIOD_DAYS    payout hold period, default 14
+//   VPN_IP_LIST         comma-separated IPs/CIDRs flagged as VPN/datacenter
+//   KYC_REQUIRED        default false; KYC_FIELDS (JSON) collected when on
+model RewardSetting {
+  key       String   @id
+  value     String // JSON-encoded value
+  updatedAt DateTime @updatedAt
+}

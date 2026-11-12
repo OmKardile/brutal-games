@@ -1,0 +1,54 @@
+🚀 Initializing Z-AI SDK...
+🔎 Searching images: "giant monster creature in dark arena with red glow, cinematic silhouette"
+✅ Got 6 images
+{
+  "success": true,
+  "query": "giant monster creature in dark arena with red glow, cinematic silhouette",
+  "count": 6,
+  "ranked": false,
+  "captioned_count": 0,
+  "results": [
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/beb9b79cb37a.jpg",
+      "caption": "",
+      "source": "Bloody Disgusting",
+      "original_width": "1280px",
+      "original_height": "720px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/dbb5292cc9b3.jpg",
+      "caption": "",
+      "source": "DayOne",
+      "original_width": "2048px",
+      "original_height": "1152px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/a0f2e7a2c553.jpg",
+      "caption": "",
+      "source": "StockCake",
+      "original_width": "768px",
+      "original_height": "1344px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/da5d7bbbdae7.jpg",
+      "caption": "",
+      "source": "IGN",
+      "original_width": "1280px",
+      "original_height": "720px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/61fccf008013.png",
+      "caption": "",
+      "source": "Warframe",
+      "original_width": "1920px",
+      "original_height": "1080px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/57a3b3bec6d0.jpeg",
+      "caption": "",
+      "source": "Reddit",
+      "original_width": "3416px",
+      "original_height": "1920px"
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+🚀 Initializing Z-AI SDK...
+🔎 Searching images: "dark apocalyptic industrial factory interior at night, red emergency lights, cinematic wide shot"
+✅ Got 6 images
+{
+  "success": true,
+  "query": "dark apocalyptic industrial factory interior at night, red emergency lights, cinematic wide shot",
+  "count": 6,
+  "ranked": false,
+  "captioned_count": 0,
+  "results": [
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/6e89ccfb414a.png",
+      "caption": "",
+      "source": "The Caretaker Fan Projects Wiki - wiki.gg",
+      "original_width": "1600px",
+      "original_height": "1600px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/33e1f5de0676.jpg",
+      "caption": "",
+      "source": "PicX Studio",
+      "original_width": "1200px",
+      "original_height": "675px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/4f55f406286f.jpg",
+      "caption": "",
+      "source": "Yelp",
+      "original_width": "1000px",
+      "original_height": "1000px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/0ddbb47ac464.jpg",
+      "caption": "",
+      "source": "IMDb",
+      "original_width": "1080px",
+      "original_height": "1600px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/612efefdcf3b.jpeg",
+      "caption": "",
+      "source": "Issuu",
+      "original_width": "1186px",
+      "original_height": "1580px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/95253d285797.jpg",
+      "caption": "",
+      "source": "Tone Glow - Substack",
+      "original_width": "4608px",
+      "original_height": "3456px"
+    }
+  ]
+}

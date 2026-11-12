@@ -1,0 +1,54 @@
+🚀 Initializing Z-AI SDK...
+🔎 Searching images: "futuristic soldier in dark armor with glowing red visor, dramatic rim lighting, cinematic game art"
+✅ Got 6 images
+{
+  "success": true,
+  "query": "futuristic soldier in dark armor with glowing red visor, dramatic rim lighting, cinematic game art",
+  "count": 6,
+  "ranked": false,
+  "captioned_count": 0,
+  "results": [
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/dfccb09e9844.jpg",
+      "caption": "",
+      "source": "Shoty",
+      "original_width": "1200px",
+      "original_height": "675px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/defbd06ecc78.jpg",
+      "caption": "",
+      "source": "Media.io",
+      "original_width": "896px",
+      "original_height": "1200px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/55323848ae23.jpg",
+      "caption": "",
+      "source": "GitHub",
+      "original_width": "1200px",
+      "original_height": "675px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/4be2e05cec9b.jpg",
+      "caption": "",
+      "source": "Dreamstime",
+      "original_width": "1600px",
+      "original_height": "1290px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/c0acad6bd20f.jpg",
+      "caption": "",
+      "source": "PicX Studio",
+      "original_width": "1200px",
+      "original_height": "675px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/4a78c90a555d.jpg",
+      "caption": "",
+      "source": "Shoty",
+      "original_width": "900px",
+      "original_height": "1200px"
+    }
+  ]
+}
