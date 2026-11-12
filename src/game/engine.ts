@@ -572,7 +572,8 @@ export class BrutalGame {
     img.onerror = () => {
       // photo unavailable — procedural grid fallback stays in place
     }
-    img.src = '/images/arena_floor.jpg'
+    // base-path aware (GitHub Pages static export serves from a sub-path)
+    img.src = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ''}/images/arena_floor.jpg`
   }
 
   private bakeBg() {

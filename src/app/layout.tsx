@@ -31,13 +31,13 @@ export const metadata: Metadata = {
     "tower stacker",
   ],
   icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
+    icon: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/logo.svg`,
   },
   openGraph: {
     title: "BRUTAL//GAMES — stop reading, start playing",
     description:
       "Two free browser games: a twin-stick wave shooter and a one-tap tower stacker. No download.",
-    images: ["/images/arena_bg.jpg"],
+    images: [`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/images/arena_bg.jpg`],
     type: "website",
   },
 };

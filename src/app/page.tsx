@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { apiUrl, fetchBoard as fetchBoardApi, type BoardEntry, type BoardTotals } from '@/lib/scores-client'
+import { assetUrl } from '@/lib/assets'
 import {
   Activity,
   Crosshair,
@@ -224,7 +225,7 @@ export default function LandingPage() {
         {/* real-world backdrop */}
         <div className="absolute inset-0">
           <Image
-            src="/images/arena_bg.jpg"
+            src={assetUrl("/images/arena_bg.jpg")}
             alt="A burning street at night — the arena awaits"
             fill
             priority
@@ -297,7 +298,7 @@ export default function LandingPage() {
           <div className="relative hidden items-center justify-center md:flex">
             <div className="brutal-float relative w-72 rotate-2 overflow-hidden rounded border border-red-900/60 bg-black/60 shadow-[0_0_60px_rgba(239,68,68,0.25)]">
               <Image
-                src="/images/hero_char.jpg"
+                src={assetUrl("/images/hero_char.jpg")}
                 alt="Armored pilot of the arena"
                 width={448}
                 height={600}
@@ -381,7 +382,7 @@ export default function LandingPage() {
             >
               <div className="relative h-44 overflow-hidden border-b border-red-950/70">
                 <Image
-                  src="/images/shots/shot-game.jpg"
+                  src={assetUrl("/images/shots/shot-game.jpg")}
                   alt="BRUTAL ARENA — top-down wave shooter gameplay"
                   fill
                   className="object-cover opacity-70 transition-transform duration-500 group-hover:scale-105"
@@ -563,9 +564,9 @@ export default function LandingPage() {
           </div>
           <div className="mt-10 grid gap-4 md:grid-cols-3">
             {[
-              { src: '/images/shots/shot-game.jpg', label: 'WAVE 6 — FULL CONTACT', alt: 'Mid-run combat in the arena' },
-              { src: '/images/shots/shot-boss.jpg', label: 'THE BRUTE — WAVE 5 BOSS', alt: 'The Brute boss fight' },
-              { src: '/images/shots/shot-menu.jpg', label: 'PRE-DROP BRIEFING', alt: 'Pre-run briefing screen' },
+              { src: assetUrl('/images/shots/shot-game.jpg'), label: 'WAVE 6 — FULL CONTACT', alt: 'Mid-run combat in the arena' },
+              { src: assetUrl('/images/shots/shot-boss.jpg'), label: 'THE BRUTE — WAVE 5 BOSS', alt: 'The Brute boss fight' },
+              { src: assetUrl('/images/shots/shot-menu.jpg'), label: 'PRE-DROP BRIEFING', alt: 'Pre-run briefing screen' },
             ].map((s) => (
               <figure
                 key={s.src}
@@ -604,7 +605,7 @@ export default function LandingPage() {
           {/* boss art banner */}
           <div className="relative mt-10 overflow-hidden rounded border border-red-900/60">
             <Image
-              src="/images/boss_art.jpg"
+              src={assetUrl("/images/boss_art.jpg")}
               alt="The Brute — boss of the arena"
               width={1600}
               height={900}
@@ -749,7 +750,7 @@ export default function LandingPage() {
       <section className="relative overflow-hidden py-24">
         <div className="absolute inset-0">
           <Image
-            src="/images/arena_bg.jpg"
+            src={assetUrl("/images/arena_bg.jpg")}
             alt=""
             fill
             className="object-cover object-bottom opacity-30"

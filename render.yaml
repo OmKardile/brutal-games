@@ -1,0 +1,42 @@
+# Render blueprint — the full BRUTAL//GAMES app: both games, shared SQLite
+# leaderboard, accounts and the optional rewards program.
+#
+# One-click deploy (repo is public):
+#   https://render.com/deploy?repo=https://github.com/OmKardile/brutal-games
+#
+# Free-plan reality check (https://render.com/docs/free):
+#   - The service spins down after 15 min without traffic (~1 min cold start).
+#   - EPHEMERAL filesystem: the SQLite file is recreated on every deploy,
+#     restart and spin-down. The schema auto-creates at boot, so the site keeps
+#     working — but leaderboards/accounts reset. (Games still fall back to a
+#     per-browser local board whenever the API is unreachable.)
+#   - To persist data: upgrade the service to a paid instance (Starter+) and
+#     attach the disk block at the bottom. DATABASE_URL already points at /data.
+services:
+  - type: web
+    name: brutal-games
+    runtime: docker # Bun inside the container (see Dockerfile)
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    autoDeploy: true # redeploy on every push to main
+    envVars:
+      - key: DATABASE_URL
+        value: file:/data/brutal.db
+      - key: SESSION_SECRET
+        generateValue: true # random secret, generated once at first deploy
+      # Optional — add later in Dashboard -> Environment when needed:
+      #   APP_URL                              (only for a custom domain;
+      #        otherwise the Render URL is picked up automatically)
+      #   ADMIN_EMAIL + ADMIN_PASSWORD         (seed the first admin at boot)
+      #   TURNSTILE_SITE_KEY + TURNSTILE_SECRET_KEY   (captcha on signup/payout)
+      #   RESEND_API_KEY or BREVO_API_KEY + MAIL_FROM (verification emails)
+      #   GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET     (Google login)
+    # --- persistence upgrade (paid instances only) --------------------------
+    # 1. Upgrade the service to Starter in the Render dashboard.
+    # 2. Uncomment the block below and redeploy — data in /data then survives
+    #    redeploys, restarts and spin-downs.
+    # disk:
+    #   name: brutal-data
+    #   mountPath: /data
+    #   sizeGB: 1

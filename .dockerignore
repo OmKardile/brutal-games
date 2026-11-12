@@ -1,0 +1,21 @@
+# never bake into the image:
+node_modules
+.next
+out
+db
+.git
+.github
+.zscripts
+.claude
+.z-ai-config
+tool-results
+download
+mini-services
+examples
+skills
+.env*
+*.log
+*.tsbuildinfo
+next-env.d.ts
+Dockerfile
+render.yaml

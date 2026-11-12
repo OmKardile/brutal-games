@@ -3,6 +3,33 @@
 All notable changes to BRUTAL//GAMES. Dates are UTC. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions are ours, not semver-strict.
 
+## [0.4.1] — 2026-11-13
+
+### Fixed — static-site (GitHub Pages) asset bugs
+- Every landing-page image and the arena floor texture 404'd on the static site:
+  root-absolute `/images/...` paths are now base-path aware (`assetUrl()` in
+  `src/lib/assets.ts`, applied to all `<Image>` srcs and the engine's floor
+  photo). Paths resolve under `/brutal-games/` in static builds and stay
+  unchanged in dynamic mode (localhost, Render).
+- Favicon now ships from the local `/logo.svg` instead of an external CDN URL.
+
+### Added — Render deployment (full app)
+- `render.yaml` blueprint + `Dockerfile` (Bun, Next standalone, Prisma/SQLite)
+  with `scripts/docker-start.sh`: schema auto-sync and optional first-admin
+  seed at container boot. One-click deploy link in the README.
+- `/api/health` readiness probe (used by the Render health check).
+- `APP_URL` falls back to Render's injected `RENDER_EXTERNAL_URL`, so the
+  blueprint deploys with zero manual prompts.
+- Free-plan trade-offs documented in `render.yaml`: spin-down after 15 min
+  idle, ephemeral SQLite (recreated at boot), plus the paid `disk:` upgrade
+  path for persistence.
+
+### Changed
+- GitHub Pages deploy workflow now shipped as `docs/deploy-pages-workflow.yml` —
+  files under `.github/workflows/` can't be pushed with the current token (no
+  `workflow` scope); the manual `gh-pages` runbook stays the default. README
+  deployment section rewritten: Render is the primary target.
+
 ## [0.4.0] — 2026-11-13
 
 ### Added — second game + public deployment

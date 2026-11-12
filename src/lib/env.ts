@@ -14,7 +14,9 @@ export const env = {
     return req('DATABASE_URL')
   },
   get APP_URL() {
-    return (process.env.APP_URL ?? 'http://localhost:3000').replace(/\/+$/, '')
+    // RENDER_EXTERNAL_URL is injected by Render (https://<service>.onrender.com)
+    // so the blueprint deploys without manual configuration.
+    return (process.env.APP_URL ?? process.env.RENDER_EXTERNAL_URL ?? 'http://localhost:3000').replace(/\/+$/, '')
   },
   get SESSION_SECRET() {
     return process.env.SESSION_SECRET ?? 'dev-insecure-session-secret'
