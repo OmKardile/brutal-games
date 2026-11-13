@@ -26,6 +26,8 @@ import {
   type BoardEntry,
   type BoardResult,
 } from '@/lib/scores-client'
+import { beginRun, endRun } from '@/lib/run-session-client'
+import { RankAuthHint } from '@/components/portal/RankAuthHint'
 import {
   ArrowLeft,
   Crosshair,
@@ -67,6 +69,7 @@ export default function DodgeRunner({ stage }: { stage?: StageProps }) {
   const [score, setScore] = useState(0)
   const [distance, setDistance] = useState(0)
   const [overStats, setOverStats] = useState<DodgeStats | null>(null)
+  const [needsAuth, setNeedsAuth] = useState(false)
   const [muted, setMuted] = useState(false)
   const [board, setBoard] = useState<BoardEntry[]>([])
   const [boardMode, setBoardMode] = useState<'online' | 'local'>('online')
@@ -111,6 +114,9 @@ export default function DodgeRunner({ stage }: { stage?: StageProps }) {
           setScore(0)
           setDistance(0)
           setNewBest(false)
+          // fresh server-side run session for this run (ranked submission)
+          endRun()
+          void beginRun('dodge')
         } else if (ev.phase === 'over') {
           window.setTimeout(() => {
             const stats = statsRef.current
@@ -242,6 +248,7 @@ export default function DodgeRunner({ stage }: { stage?: StageProps }) {
       setRank(res.rank)
       setBoard(res.board)
       setBoardMode(res.mode)
+      setNeedsAuth(Boolean(res.authRequired))
       rememberPlayerName(n)
     } catch {
       // user can retry
@@ -506,6 +513,7 @@ export default function DodgeRunner({ stage }: { stage?: StageProps }) {
                   )}
                 </div>
               )}
+              {needsAuth && <RankAuthHint />}
               <div className="mt-3 flex justify-center">
                 <Button
                   variant="outline"

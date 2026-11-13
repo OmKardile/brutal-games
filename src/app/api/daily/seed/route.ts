@@ -4,6 +4,7 @@ import { getPortalConfig } from '@/lib/daily/config'
 import { dailySeedFor } from '@/lib/daily/seed'
 import { dateKeyForTz } from '@/lib/daily/tz'
 import { limit, tooMany } from '@/lib/rate-limit'
+import { clientIp } from '@/lib/env'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,8 +16,8 @@ export const dynamic = 'force-dynamic'
  * ranked=false and are marked UNRANKED on the board.
  */
 export async function GET(req: NextRequest) {
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'local'
-  if (!limit(`daily-seed:${ip}`, 60, 60_000).ok) return tooMany(60)
+  const ip = clientIp(req)
+  if (!(await limit(`daily-seed:${ip}`, 60, 60_000)).ok) return tooMany(60)
 
   const slug = req.nextUrl.searchParams.get('game') ?? ''
   const game = getGame(slug)

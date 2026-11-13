@@ -207,3 +207,85 @@ ledger/pool math underneath is solid and tested.
 keep the local-board fallback, mirroring the static export). Admin flows gain
 2FA + audit logs. Persistent rate limiting and hashed device signals add two
 small tables. The threat model is a living document, updated at every gate.
+
+## ADR-021 — Passwords: argon2id via Bun.password, transparent legacy migration
+
+Date: 2026-11-13 · Status: accepted (phase 2)
+
+**Context.** Passwords were scrypt N=16384/r=8/p=1 with an 8-char minimum —
+below the policy target (argon2id or scrypt N≥2^17; length 10+, no composition
+rules). Production runs on Bun (Docker `oven/bun`, render.yaml), which ships
+argon2id natively.
+
+**Decision.** New hashes are argon2id PHC strings from `Bun.password.hash`.
+Legacy `scrypt$…` hashes stay verifiable; `needsRehash()` lets the login route
+upgrade them transparently on the Bun runtime. Non-Bun dev servers still hash
+with scrypt (marked for upgrade). Policy: min length 10, max 200, NO
+composition rules. Optional breached-password rejection via the HIBP
+k-anonymity range API, gated behind `HIBP_CHECK=1`, failing open on network
+errors. Login runs a dummy argon2 verify for unknown users (timing oracle fix).
+
+**Consequences.** Zero migration work for users; hashes upgrade themselves at
+next login. A non-Bun production runtime cannot verify argon2 (documented:
+production is Bun).
+
+## ADR-022 — Persistent rate limiting + trusted-proxy client IP
+
+Date: 2026-11-13 · Status: accepted (phase 2)
+
+**Context.** The limiter was an in-memory Map (reset on every restart/spin-up)
+and `clientIp()` trusted the FIRST X-Forwarded-For entry verbatim — safe behind
+the committed Caddy/Render (which overwrite the header) but spoofable under any
+proxy that appends, or when the app is exposed directly.
+
+**Decision.** Buckets live in SQLite (`RateLimitBucket`: sliding-window hit
+array + consecutive-failure counter + lockedUntil) — restart-proof, same bucket
+keys as before plus new per-user daily-run and score-submit buckets. On top of
+the window limiter, login gets per-account AND per-IP exponential-backout
+lockout (5 fails → 15s, doubling to 60min cap, 15min decay) with Turnstile
+escalation after 3 fails. `clientIp()` becomes trust-gated: without
+`TRUSTED_PROXY=1` forwarding headers are ignored (single 'direct' bucket —
+fail-safe); with it, the client IP is the RIGHTMOST untrusted XFF hop (private
+ranges + `TRUSTED_PROXIES` CIDRs skipped), immune to injected leftmost entries
+under both overwrite and append proxy semantics.
+
+**Consequences.** One extra table and one DB round-trip per limited request
+(interactive transaction; single-process SQLite handles it). Misconfigured
+deploys fail toward MORE limiting, never less. Deploys behind a proxy MUST set
+`TRUSTED_PROXY=1` or everyone shares one bucket (documented in .env.example).
+
+## ADR-023 — Score submissions: sessions + run tokens + account callsigns
+
+Date: 2026-11-13 · Status: accepted (phase 2)
+
+**Context.** `POST /api/scores` was fully public and name-based: anyone could
+curl a 100M score under any name, including "ADMIN" or slurs (threat T1/T3).
+Rewards play-sessions existed but were 18+/rewards-gated and non-CSPRNG.
+
+**Decision.**
+1. One unified run-session primitive: `POST /api/run/start` (auth required, NO
+   rewards coupling) opens a PlaySession with a 32-byte CSPRNG token, bound to
+   the game slug; one active session per account (new run aborts the old). The
+   legacy `/api/rewards/session/start` delegates to the same lib; RewardsHud
+   consumes the shared token via `run-session-client`.
+2. `POST /api/scores` requires an account. RANKED entries must present the run
+   token (single-use claim via `scoreClaimedAt`, order-independent from the
+   rewards run-end) and pass the manifest plausibility ceiling against the
+   SERVER-measured duration. Tokenless entries are stored display-only
+   (ranked=false) and excluded from the competitive board + totals. Guests fall
+   back to the per-browser local board — same as the static export — with a
+   "sign in to rank" hint.
+3. Board names are ACCOUNT callsigns, never client strings: `User.nameKey`
+   (case-insensitive unique) with policy sanitization (control/zero-width/bidi
+   stripped), reserved-name blocking (leet-aware) and a profanity blocklist
+   (`NAME_BLOCKLIST` env extends it). First ranked post auto-assigns a
+   PILOT-XXXX callsign; users set/change it on /rewards (`/api/auth/profile`).
+   Daily-run boards use the same policy (guests: sanitized, not unique).
+
+**Consequences.** Forged scores can no longer reach the ranked board without a
+server-issued token tied to a measured run; impersonation on boards is
+structurally impossible. Dynamic-deploy guests lose ranked global boards (the
+approved UX trade-off). Extra columns: `HighScore.userId/ranked`,
+`PlaySession.game/scoreClaimedAt`, `User.nameKey`; new `RateLimitBucket` table.
+Phase 3 upgrades the token itself to HMAC-signed with key-id rotation and adds
+heartbeat nonce chains + statistical checks.

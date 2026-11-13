@@ -15,7 +15,9 @@ import {
   Coins,
   IndianRupee,
   ListChecks,
+  MonitorSmartphone,
   ShieldAlert,
+  Tag,
   Wallet,
 } from 'lucide-react'
 
@@ -52,6 +54,14 @@ interface Payout {
   transactionRef: string | null
 }
 
+interface SessionRow {
+  id: string
+  current: boolean
+  ip: string | null
+  userAgent: string | null
+  createdAt: string
+}
+
 const REASON_LABEL: Record<string, string> = {
   PLAY_TIME: 'ACTIVE PLAY',
   LOGIN_STREAK: 'LOGIN STREAK',
@@ -83,6 +93,13 @@ export default function RewardsPage() {
   const [turnstileToken, setTurnstileToken] = useState<string | undefined>(undefined)
   const [payoutBusy, setPayoutBusy] = useState(false)
   const [payoutMsg, setPayoutMsg] = useState<string | null>(null)
+
+  // account: callsign + sessions
+  const [callsign, setCallsign] = useState('')
+  const [callsignBusy, setCallsignBusy] = useState(false)
+  const [callsignMsg, setCallsignMsg] = useState<string | null>(null)
+  const [sessions, setSessions] = useState<SessionRow[]>([])
+  const [sessionsBusy, setSessionsBusy] = useState(false)
 
   const loadData = useCallback(async () => {
     try {
@@ -116,6 +133,69 @@ export default function RewardsPage() {
   useEffect(() => {
     if (me?.user?.upiId) setUpi((cur) => cur || me.user!.upiId!)
   }, [me])
+
+  // account: callsign + active sessions
+  useEffect(() => {
+    if (me?.user) {
+      setCallsign((cur) => cur || me.user!.name || '')
+      void (async () => {
+        try {
+          const res = await fetch('/api/auth/sessions', { cache: 'no-store' })
+          if (res.ok) setSessions(((await res.json()) as { sessions: SessionRow[] }).sessions)
+        } catch {
+          // non-critical
+        }
+      })()
+    }
+  }, [me])
+
+  const saveCallsign = async () => {
+    if (callsignBusy || !callsign.trim()) return
+    setCallsignBusy(true)
+    setCallsignMsg(null)
+    try {
+      const res = await fetch('/api/auth/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: callsign.trim() }),
+      })
+      const data = (await res.json()) as { error?: string; name?: string }
+      if (res.ok) {
+        setCallsign(data.name ?? callsign)
+        setCallsignMsg('CALLSIGN SAVED.')
+        await refresh()
+      } else {
+        setCallsignMsg(data.error ?? 'Failed.')
+      }
+    } catch {
+      setCallsignMsg('Network error.')
+    } finally {
+      setCallsignBusy(false)
+    }
+  }
+
+  const revokeSessions = async (mode: 'others' | 'all') => {
+    if (sessionsBusy) return
+    setSessionsBusy(true)
+    try {
+      const res = await fetch('/api/auth/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ revoke: mode }),
+      })
+      if (res.ok && mode === 'others') {
+        const list = await fetch('/api/auth/sessions', { cache: 'no-store' })
+        if (list.ok) setSessions(((await list.json()) as { sessions: SessionRow[] }).sessions)
+      } else if (res.ok && mode === 'all') {
+        window.location.href = '/login'
+        return
+      }
+    } catch {
+      // ignore
+    } finally {
+      setSessionsBusy(false)
+    }
+  }
 
   const submitConsent = async () => {
     if (consentBusy || !adult || !acceptTerms) return
@@ -455,6 +535,77 @@ export default function RewardsPage() {
                     </p>
                   </>
                 )}
+              </div>
+            </div>
+
+            {/* ------------------------------------------------ account: callsign + sessions */}
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <div className="rounded border border-stone-800/80 bg-black/60 p-4">
+                <div className="flex items-center gap-1.5 text-[10px] tracking-widest text-stone-500">
+                  <Tag className="h-3.5 w-3.5" /> CALLSIGN (BOARD NAME)
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <Input
+                    value={callsign}
+                    onChange={(e) => setCallsign(e.target.value.slice(0, 16))}
+                    maxLength={16}
+                    placeholder="PILOT-0000"
+                    className="h-10 border-stone-700 bg-black/60 tracking-widest placeholder:text-stone-700 focus-visible:ring-amber-500"
+                    aria-label="Callsign"
+                  />
+                  <Button
+                    onClick={() => void saveCallsign()}
+                    disabled={callsignBusy || callsign.trim().length === 0}
+                    variant="outline"
+                    className="h-10 border-amber-800 bg-transparent font-bold tracking-widest text-amber-500 hover:border-amber-600"
+                  >
+                    {callsignBusy ? '…' : 'SET'}
+                  </Button>
+                </div>
+                {callsignMsg && (
+                  <p className="mt-2 text-[10px] tracking-widest text-stone-400">{callsignMsg}</p>
+                )}
+                <p className="mt-2 text-[9px] leading-relaxed tracking-widest text-stone-600">
+                  THIS NAME GOES ON RANKED LEADERBOARDS. ONE CALLSIGN PER ACCOUNT —
+                  NO IMPERSONATION, NO SLURS.
+                </p>
+              </div>
+
+              <div className="rounded border border-stone-800/80 bg-black/60 p-4">
+                <div className="flex items-center gap-1.5 text-[10px] tracking-widest text-stone-500">
+                  <MonitorSmartphone className="h-3.5 w-3.5" /> ACTIVE SESSIONS
+                </div>
+                <div className="mt-3 max-h-28 overflow-y-auto">
+                  {sessions.length === 0 && (
+                    <p className="text-[10px] tracking-widest text-stone-600">NO ACTIVE SESSIONS</p>
+                  )}
+                  {sessions.map((s) => (
+                    <p key={s.id} className="text-[10px] leading-relaxed tracking-widest text-stone-500">
+                      <span className={s.current ? 'text-emerald-400' : 'text-stone-400'}>
+                        {s.current ? 'THIS DEVICE' : 'OTHER DEVICE'}
+                      </span>{' '}
+                      — {fmtDate(s.createdAt)}
+                    </p>
+                  ))}
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <Button
+                    onClick={() => void revokeSessions('others')}
+                    disabled={sessionsBusy || sessions.length <= 1}
+                    variant="outline"
+                    className="h-9 border-stone-700 bg-transparent text-[10px] font-bold tracking-widest text-stone-300 hover:border-stone-500"
+                  >
+                    LOG OUT OTHERS
+                  </Button>
+                  <Button
+                    onClick={() => void revokeSessions('all')}
+                    disabled={sessionsBusy}
+                    variant="outline"
+                    className="h-9 border-red-900 bg-transparent text-[10px] font-bold tracking-widest text-red-400 hover:border-red-700"
+                  >
+                    LOG OUT EVERYWHERE
+                  </Button>
+                </div>
               </div>
             </div>
 

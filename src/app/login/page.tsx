@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Turnstile } from '@/components/Turnstile'
 import { useToast } from '@/hooks/use-toast'
 import { ArrowLeft, LogIn } from 'lucide-react'
 
@@ -27,11 +28,19 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [googleEnabled, setGoogleEnabled] = useState(false)
+  const [siteKey, setSiteKey] = useState('')
+  // server tells us to present a captcha after repeated failures
+  const [captchaRequired, setCaptchaRequired] = useState(false)
+  const [turnstileToken, setTurnstileToken] = useState<string | undefined>(undefined)
 
   useEffect(() => {
     void fetch('/api/rewards/config', { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null))
-      .then((c) => c && setGoogleEnabled(Boolean(c.googleEnabled)))
+      .then((c) => {
+        if (!c) return
+        setGoogleEnabled(Boolean(c.googleEnabled))
+        setSiteKey(String(c.turnstileSiteKey ?? ''))
+      })
       .catch(() => undefined)
   }, [])
 
@@ -44,9 +53,15 @@ export default function LoginPage() {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, signals: collectSignals() }),
+        body: JSON.stringify({
+          email,
+          password,
+          signals: collectSignals(),
+          ...(captchaRequired && turnstileToken ? { turnstileToken } : {}),
+        }),
       })
-      const data = (await res.json()) as { error?: string }
+      const data = (await res.json()) as { error?: string; captchaRequired?: boolean }
+      if (data.captchaRequired) setCaptchaRequired(true)
       if (!res.ok) {
         setError(data.error ?? 'Login failed.')
         return
@@ -89,13 +104,15 @@ export default function LoginPage() {
             <Input
               type="password"
               required
-              minLength={8}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="PASSWORD"
               className="h-11 border-red-900/60 bg-black/60 tracking-wide placeholder:text-stone-700 focus-visible:ring-red-500"
               aria-label="Password"
             />
+            {captchaRequired && siteKey && (
+              <Turnstile siteKey={siteKey} onToken={setTurnstileToken} />
+            )}
             {error && (
               <p className="text-[11px] tracking-widest text-red-500">{error}</p>
             )}
@@ -148,3 +165,4 @@ export default function LoginPage() {
     </main>
   )
 }
+

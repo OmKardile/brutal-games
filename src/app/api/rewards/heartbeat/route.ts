@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { authUser } from '@/lib/auth/guard'
 import { getSettings } from '@/lib/rewards/config'
 import { processHeartbeat } from '@/lib/rewards/heartbeat'
+import { csrfBlocked } from '@/lib/http'
 import { limit, tooMany } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
@@ -14,11 +15,14 @@ const Schema = z.object({
 })
 
 export async function POST(req: NextRequest) {
+  const csrf = csrfBlocked(req)
+  if (csrf) return csrf
+
   const { user, error } = await authUser()
   if (error) return error
 
   // burst guard on top of the interval check
-  const rl = limit(`heartbeat:${user.id}`, 10, 60_000)
+  const rl = await limit(`heartbeat:${user.id}`, 10, 60_000)
   if (!rl.ok) return tooMany(rl.retryAfterSec)
 
   const body = await req.json().catch(() => null)

@@ -5,6 +5,7 @@ import { dailyBest, getStreak } from '@/lib/daily/board'
 import { dateKeyForTz } from '@/lib/daily/tz'
 import { limit, tooMany } from '@/lib/rate-limit'
 import { getSessionUser } from '@/lib/auth/session'
+import { clientIp } from '@/lib/env'
 import { db } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
@@ -15,8 +16,8 @@ export const dynamic = 'force-dynamic'
  * Guests get myBest=null and streak=null (their streak lives in localStorage).
  */
 export async function GET(req: NextRequest) {
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'local'
-  if (!limit(`daily-summary:${ip}`, 60, 60_000).ok) return tooMany(60)
+  const ip = clientIp(req)
+  if (!(await limit(`daily-summary:${ip}`, 60, 60_000)).ok) return tooMany(60)
 
   const slug = req.nextUrl.searchParams.get('game') ?? ''
   const game = getGame(slug)

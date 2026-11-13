@@ -12,9 +12,20 @@ import { hashString } from '@/game-kit/rng'
 
 let warned = false
 
-/** Server salt. Prefer DAILY_SALT; fall back to SESSION_SECRET; final dev fallback warns. */
+/**
+ * Server salt. Prefer DAILY_SALT; fall back to SESSION_SECRET. In production
+ * neither may be missing (C1 companion fix — no insecure constant, ever).
+ */
 function dailySalt(): string {
   const salt = process.env.DAILY_SALT || process.env.SESSION_SECRET
+  if (process.env.NODE_ENV === 'production') {
+    if (!salt || salt.length < 8) {
+      throw new Error(
+        'DAILY_SALT (or SESSION_SECRET) must be set in production — daily seeds would otherwise be predictable.',
+      )
+    }
+    return salt
+  }
   if (salt && salt.length >= 8) return salt
   if (!warned) {
     warned = true

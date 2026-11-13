@@ -4,10 +4,12 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
 }
 
+// Query logging is dev-only: in production it is noisy, slows every request
+// and leaks data shapes (M8 partial fix — full logging strategy in phase 6).
 export const db =
   globalForPrisma.prisma ??
   new PrismaClient({
-    log: ['query'],
+    log: process.env.NODE_ENV === 'production' ? ['error'] : ['query'],
   })
 
 // SQLite WAL mode: concurrent readers while the writer works, safer crash

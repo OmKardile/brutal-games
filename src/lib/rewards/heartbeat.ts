@@ -1,11 +1,14 @@
-// Play sessions + heartbeat validation. Hardening rules:
+// Run sessions + heartbeat validation. Hardening rules:
 //   - server-side timestamps only (client never sends times)
 //   - beats faster than HEARTBEAT_INTERVAL_SEC * 0.75 are rejected
-//   - beats must carry a signed per-run token (only its hash is stored)
+//   - beats must carry a per-run token (only its hash is stored; the token
+//     itself is 32 random bytes from the CSPRNG — no Math.random/Date.now)
 //   - a session expires after 30 min without a beat, caps at 240 beats (2h)
 //   - only one open session per user; starting a new one aborts the old
+//   - score submission claims the session via scoreClaimedAt (single-use for
+//     ranked posts, independent of the rewards run-end which sets endedAt)
 
-import { createHash } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { db as defaultDb } from '@/lib/db'
 import type { PrismaClient } from '@prisma/client'
 import type { RewardSettings } from '@/lib/rewards/config'
@@ -21,22 +24,22 @@ export interface StartResult {
 
 export async function startPlaySession(
   userId: string,
+  game: string | null,
   settings: RewardSettings,
   ip: string,
   dbx: DB = defaultDb,
 ): Promise<StartResult> {
-  // single open session per user
+  // single open session per user — a new run aborts the previous
   await dbx.playSession.updateMany({
     where: { userId, endedAt: null },
     data: { endedAt: new Date(), endedReason: 'ABORTED' },
   })
-  const token = createHash('sha256')
-    .update(`${userId}:${Date.now()}:${Math.random()}`)
-    .digest('hex')
+  // CSPRNG token (H4 fix): 32 random bytes, never derived from Math.random
+  const token = randomBytes(32).toString('hex')
   // store hash of token; the raw token goes to the client only
   const stored = createHash('sha256').update(token).digest('hex')
   await dbx.playSession.create({
-    data: { userId, tokenHash: stored, ip },
+    data: { userId, tokenHash: stored, game, ip },
   })
   return { token, intervalSec: settings.HEARTBEAT_INTERVAL_SEC }
 }
@@ -149,6 +152,48 @@ export async function findOpenSession(
   const session = await dbx.playSession.findUnique({ where: { tokenHash } })
   if (!session || session.userId !== userId) return null
   return session
+}
+
+export type ScoreClaimCode =
+  | 'SESSION_NOT_FOUND'
+  | 'ALREADY_SCORED'
+  | 'GAME_MISMATCH'
+
+export type ScoreClaimResult =
+  | { ok: true; session: { id: string; startedAt: Date }; durationSec: number }
+  | { ok: false; code: ScoreClaimCode }
+
+/**
+ * Claim a run session for a ranked score submission (single-use).
+ * Order-independent with the rewards run-end: a session already ended with
+ * RUN_END can still be scored once; a session scored by run-end but not yet
+ * score-claimed still validates here.
+ */
+export async function claimScoreForSession(
+  userId: string,
+  token: string,
+  game: string,
+  dbx: DB = defaultDb,
+  now: Date = new Date(),
+): Promise<ScoreClaimResult> {
+  const tokenHash = createHash('sha256').update(token).digest('hex')
+  const session = await dbx.playSession.findUnique({ where: { tokenHash } })
+  if (!session || session.userId !== userId) return { ok: false, code: 'SESSION_NOT_FOUND' }
+  if (session.game && session.game !== game) return { ok: false, code: 'GAME_MISMATCH' }
+  if (session.scoreClaimedAt) return { ok: false, code: 'ALREADY_SCORED' }
+  // ABORTED (superseded by a newer run) or long-idle sessions don't count
+  if (session.endedAt && session.endedReason === 'ABORTED') return { ok: false, code: 'SESSION_NOT_FOUND' }
+  if (session.endedAt && session.endedReason === 'EXPIRED') return { ok: false, code: 'SESSION_NOT_FOUND' }
+  if (now.getTime() - session.startedAt.getTime() > 24 * 3600_000) {
+    return { ok: false, code: 'SESSION_NOT_FOUND' }
+  }
+
+  await dbx.playSession.update({
+    where: { id: session.id },
+    data: { scoreClaimedAt: now },
+  })
+  const durationSec = (now.getTime() - session.startedAt.getTime()) / 1000
+  return { ok: true, session: { id: session.id, startedAt: session.startedAt }, durationSec }
 }
 
 export async function endPlaySession(

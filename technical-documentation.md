@@ -23,18 +23,21 @@ input events and drives the heartbeat API. No engine API changes.
 
 | Model | Role |
 |---|---|
-| `User` | identity: scrypt hash, role PLAYER/ADMIN, status ACTIVE/FROZEN, `emailVerified`, `adultDeclaredAt` (18+), `upiId` |
+| `User` | identity: argon2id hash (legacy scrypt verifiable), role PLAYER/ADMIN, status ACTIVE/FROZEN, `emailVerified`, `adultDeclaredAt` (18+), `upiId`, `nameKey` (case-insensitive unique callsign key) |
 | `Session` | cookie token (random) → sha256 hash, 30-day sliding expiry |
 | `EmailToken` | one-time verify (72h) / reset (1h) tokens, hashed |
+| `RateLimitBucket` | persistent rate-limit + lockout state: sliding-window hit array (JSON), consecutive-failure counter, `lockedUntil` (login backoff). Survives restarts |
 | `PointEvent` | append-only ledger. `points` ±, `reason`, unique `idempotencyKey`, `reversalOfId` (unique → one reversal per original) |
 | `DailyActivity` | per-user-per-IST-day rollup; enforces `DAILY_POINT_CAP`; streak marker |
-| `PlaySession` | heartbeat session: hashed token, server timestamps, beat counter, idle expiry (30 min), beat cap (240) |
+| `PlaySession` | run session (0.8: ALL runs, not just rewards): hashed CSPRNG token, `game` slug, server timestamps, beat counter, idle expiry (30 min), beat cap (240), `scoreClaimedAt` (single-use ranked-score claim) |
+| `HighScore` | global board entry; `userId` + `ranked` (false = display-only, excluded from the competitive board) since 0.8 |
 | `MonthlyPool` | month (IST), net revenue (paise), share %, status DRAFT→LOCKED, `leftoverMinor`, `voidedMinor` |
 | `PoolDistribution` | immutable per-user snapshot at lock: points, raw share, capped share |
 | `PayoutRequest` | PENDING→APPROVED→PAID/REJECTED, `holdUntil` snapshot, transaction ref |
 | `FraudFlag` | flag-only signals → manual review queue |
 | `DeviceFingerprint` | hashed device signals + last IP, per user |
 | `RewardSetting` | key→JSON overrides of code defaults (admin editable) |
+| `DailyRun` / `DailyStreak` / `PortalSetting` | daily challenges: per-day runs (seed-checked, size-capped input log), streaks, portal config |
 
 Money is int paise everywhere. Reward days/months are Asia/Kolkata (IST) —
 `src/lib/rewards/ist.ts` converts to UTC ranges for queries.
@@ -48,6 +51,10 @@ Money is int paise everywhere. Reward days/months are Asia/Kolkata (IST) —
   return the original event.
 - **Server timestamps only.** Clients never send times; the server derives all durations
   from `PlaySession.startedAt/lastBeatAt`.
+- **Ranked scores need a server-issued run token** (0.8). `POST /api/run/start` opens the
+  session; the single-use claim (`scoreClaimedAt`) + manifest plausibility ceiling
+  against the server-measured duration gate the ranked board. Board names are account
+  callsigns (`User.nameKey` unique) — client-supplied names never reach ranked boards.
 - **Pool-only payouts.** `available = Σ locked distributions − Σ non-rejected payouts`.
   Zero revenue ⇒ zero pool ⇒ zero payouts. Caps clamp; leftover stays in the pool and is
   visible in the admin preview before locking.
@@ -56,45 +63,76 @@ Money is int paise everywhere. Reward days/months are Asia/Kolkata (IST) —
 
 ## API surface
 
-Auth: `POST /api/auth/{signup,login,logout,resend-verification,forgot-password,reset-password}`,
+Auth: `POST /api/auth/{signup,login,logout,resend-verification,forgot-password,reset-password,profile,sessions}`
+(sessions also GET — list; `POST {revoke: others|all}` — log out everywhere),
 `GET /api/auth/{me,verify-email}` (verify-email is the email link), Google:
 `GET /api/auth/google/{start,callback}` (inactive without env keys).
+Runs & boards: `POST /api/run/start` (session required — opens the run session,
+returns the CSPRNG token; NO 18+/rewards coupling), `POST /api/scores`
+(session required; `runToken` makes the entry ranked), `GET /api/scores`
+(public, ranked entries only).
 Rewards (session required): `POST /api/rewards/{consent,upi,payout}`,
 `GET /api/rewards/{summary,events,payout}`,
-`POST /api/rewards/{session/start,heartbeat,run-end}`.
-Public: `GET /api/rewards/config`, `GET /api/scores`, `POST /api/scores`.
+`POST /api/rewards/{session/start (legacy compat → same lib as /api/run/start),heartbeat,run-end}`.
+Daily: `GET /api/daily/{seed,board,summary}`, `POST /api/daily/run`.
 Admin (ADMIN role): `GET|POST /api/admin/{pool,payouts,flags,settings}`,
 `GET /api/admin/pool/preview`, `GET|POST /api/admin/users[/id]`.
 
-All bodies are zod-validated. Rate limits (in-memory sliding window): login 10/min/IP,
-signup 5/h/IP, heartbeat 10/min + interval check, payout 3/day, session starts 30/h.
+All bodies are zod-validated. All state-changing routes check the CSRF
+baseline (Origin/Host + JSON content-type, `src/lib/http.ts`). Rate limits are
+PERSISTENT (SQLite `RateLimitBucket`, survive restarts): login 10/min/IP +
+per-account/per-IP backout lockout (5 fails → 15s → doubling to 60min) +
+Turnstile after 3 fails; signup 5/h/IP; reset 20/min/IP; heartbeat 10/min +
+interval check; payout 3/day; run-start 30/h; score-submit 30/h; daily-run
+12/min/IP + 12/min/user; session-start 30/h; upi 10/h; consent 5/h;
+profile 10/h. Client IP comes from the trusted-proxy parser (`TRUSTED_PROXY=1`
+behind a reverse proxy; headers ignored otherwise).
 
 ## Security notes
 
 - **Threat model + phased hardening plan: [docs/threat-model.md](docs/threat-model.md)**
-  (v0.7.1). Audit verdicts: `/api/scores` POST is open and name-based (lock-down
-  planned); rate limiter is in-memory; play-session tokens are not CSPRNG;
-  engines are non-deterministic, so replay verification is deferred. Rewards
-  stay disabled until the plan's phase gates pass.
-- Passwords: node:crypto scrypt (N=16384), `timingSafeEqual` verification.
+  and **[SECURITY.md](SECURITY.md)** (controls overview + review checklist +
+  disclosure contact). Phase 2 (this release) fixed C1/C3/H1/H6/H7/M2/M5/L2/L3;
+  rewards stay disabled until phases 2-6 + 8 pass.
+- Passwords: argon2id via `Bun.password` (legacy scrypt verifiable + rehash-on-
+  login), min length 10, no composition rules; optional HIBP breached-password
+  rejection (`HIBP_CHECK=1`, k-anonymity, fails open). Login has per-account +
+  per-IP exponential-backoff lockout, Turnstile escalation and a dummy-verify
+  timing equalizer.
 - Sessions: 32-byte random tokens, httpOnly/SameSite=Lax cookies, sha256 at rest,
-  reset kills all sessions.
-- No account enumeration: signup and forgot-password return generic responses.
-- Turnstile on signup + payout. Dev bypass when `TURNSTILE_SECRET_KEY` unset;
-  fail-closed in production on network errors.
+  Secure on https, reset kills all sessions, freeze revokes all sessions,
+  "log out everywhere" on /rewards. Frozen accounts are rejected by `authUser()`.
+- CSRF: Origin/Host allowlist (Sec-Fetch-Site/Referer fallback) + JSON
+  content-type requirement on every state-changing route, layered with
+  SameSite=Lax.
+- Secrets: `SESSION_SECRET` (≥32 chars) and `DAILY_SALT` fail HARD in
+  production — no code fallbacks.
+- No account enumeration: signup and forgot-password return generic responses;
+  login burns the same KDF cost for unknown users.
+- Turnstile on signup + payout + login-after-failures. Dev bypass when
+  `TURNSTILE_SECRET_KEY` unset; fail-closed in production on network errors.
 - Anti-fraud signals never auto-punish: they open `FraudFlag`s for manual review.
   Freezing/voiding is always a human action.
+- Board names: account callsigns only — policy sanitization, reserved names
+  (leet-aware), blocklist (`NAME_BLOCKLIST` env), case-insensitive uniqueness.
 - Known limits: run stats are client-reported (mitigated by session-duration
-  plausibility checks + daily caps + review); VPN/datacenter detection is a static
-  admin-editable list (no GeoIP service); IPv6 list matching is exact-match only.
+  plausibility checks + daily caps + review); play-session tokens are opaque
+  bearer tokens until phase 3 adds HMAC binding + key rotation; VPN/datacenter
+  detection is a static admin-editable list (no GeoIP service); IPv6 list
+  matching is exact-match only.
 
 ## Testing
 
-`bun test tests/` — 52 tests. `payout-math.test.ts` (pure edge cases: zero revenue,
+`bun test tests/` — 142 tests. `payout-math.test.ts` (pure edge cases: zero revenue,
 zero points, caps, rounding residue, thresholds), `ledger.test.ts` (real temp SQLite DB:
 idempotency, daily-cap clamps, streaks, reversal semantics, month clamping, gates),
 `rewards-logic.test.ts` (heartbeat timing, run plausibility, IST boundaries, IP/CIDR
-matching, fingerprint stability, challenge determinism).
+matching, fingerprint stability, challenge determinism), `auth-hardening.test.ts`
+(argon2id + legacy scrypt + rehash flags + policy, name policy, CSRF matrix,
+backoff math), `rate-limit.test.ts` (persistent sliding window, restart persistence,
+lockout state machine), `scores-service.test.ts` (ranked-with-token, replay burn,
+foreign/mismatched/aborted tokens, implausible scores, callsign claims,
+ranked-only boards).
 
 ## Operations
 

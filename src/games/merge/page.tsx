@@ -26,6 +26,8 @@ import {
   type BoardEntry,
   type BoardResult,
 } from '@/lib/scores-client'
+import { beginRun, endRun } from '@/lib/run-session-client'
+import { RankAuthHint } from '@/components/portal/RankAuthHint'
 import {
   ArrowLeft,
   Atom,
@@ -83,6 +85,7 @@ export default function MergeRunner({ stage }: { stage?: StageProps }) {
   const [combo, setCombo] = useState(1)
   const [tier, setTier] = useState(1)
   const [overStats, setOverStats] = useState<MergeStats | null>(null)
+  const [needsAuth, setNeedsAuth] = useState(false)
   const [muted, setMuted] = useState(false)
   const [board, setBoard] = useState<BoardEntry[]>([])
   const [boardMode, setBoardMode] = useState<'online' | 'local'>('online')
@@ -129,6 +132,9 @@ export default function MergeRunner({ stage }: { stage?: StageProps }) {
           setCombo(1)
           setTier(1)
           setNewBest(false)
+          // fresh server-side run session for this run (ranked submission)
+          endRun()
+          void beginRun('merge')
         } else if (ev.phase === 'over') {
           window.setTimeout(() => {
             const stats = statsRef.current
@@ -259,6 +265,7 @@ export default function MergeRunner({ stage }: { stage?: StageProps }) {
       setRank(res.rank)
       setBoard(res.board)
       setBoardMode(res.mode)
+      setNeedsAuth(Boolean(res.authRequired))
       rememberPlayerName(n)
     } catch {
       // user can retry
@@ -556,6 +563,7 @@ export default function MergeRunner({ stage }: { stage?: StageProps }) {
                   )}
                 </div>
               )}
+              {needsAuth && <RankAuthHint />}
               <div className="mt-3 flex justify-center">
                 <Button
                   variant="outline"

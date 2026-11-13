@@ -34,6 +34,8 @@ import {
   submitScore as submitScoreApi,
   type BoardEntry,
 } from '@/lib/scores-client'
+import { beginRun, endRun } from '@/lib/run-session-client'
+import { RankAuthHint } from '@/components/portal/RankAuthHint'
 import {
   ArrowLeft,
   Crosshair,
@@ -77,6 +79,8 @@ export default function ArenaRunner({ stage }: { stage?: StageProps }) {
   const [phase, setPhase] = useState<GamePhase>('menu')
   const [choices, setChoices] = useState<UpgradeDef[]>([])
   const [overStats, setOverStats] = useState<RunStats | null>(null)
+  const [needsAuth, setNeedsAuth] = useState(false)
+  const runActiveRef = useRef(false)
   const [muted, setMuted] = useState(false)
   const [board, setBoard] = useState<BoardEntry[]>([])
   const [name, setName] = useState('')
@@ -225,6 +229,18 @@ export default function ArenaRunner({ stage }: { stage?: StageProps }) {
     engineRef.current?.setTheme(theme)
   }, [theme])
 
+  // run-session lifecycle: fresh session when a run starts (not on resume)
+  useEffect(() => {
+    if (phase === 'playing' && !runActiveRef.current) {
+      runActiveRef.current = true
+      endRun()
+      void beginRun('arena')
+    }
+    if (phase === 'gameover' || phase === 'menu') {
+      runActiveRef.current = false
+    }
+  }, [phase])
+
   const start = () => {
     engineRef.current?.engine.unlockAudio()
     engineRef.current?.engine.startRun()
@@ -244,6 +260,7 @@ export default function ArenaRunner({ stage }: { stage?: StageProps }) {
       setSubmitted(true)
       setRank(res.rank)
       setBoard(res.board)
+      setNeedsAuth(Boolean(res.authRequired))
       unlockAchievement('ranked')
       rememberPlayerName(n)
     } catch {
@@ -714,6 +731,7 @@ export default function ArenaRunner({ stage }: { stage?: StageProps }) {
                   SCORE LOGGED{rank ? ` — GLOBAL RANK #${rank}` : ''}
                 </div>
               )}
+              {needsAuth && <RankAuthHint />}
               <div className="mt-3 flex justify-center">
                 <Button
                   variant="outline"

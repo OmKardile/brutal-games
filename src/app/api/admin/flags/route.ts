@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { requireAdmin } from '@/lib/auth/guard'
+import { csrfBlocked } from '@/lib/http'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,6 +31,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const csrf = csrfBlocked(req)
+  if (csrf) return csrf
+
   const { user: admin, error } = await requireAdmin()
   if (error) return error
 

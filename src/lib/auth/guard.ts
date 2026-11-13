@@ -1,4 +1,6 @@
 // Route-handler guards: session user, verified-email rules, admin role.
+// Authorization ALWAYS happens here (inside the route handler), never in
+// middleware alone — see decisions.md (CVE-2025-29927 class).
 
 import { NextResponse } from 'next/server'
 import { getSessionUser } from '@/lib/auth/session'
@@ -10,6 +12,11 @@ export async function authUser(): Promise<
   const user = await getSessionUser()
   if (!user) {
     return { error: NextResponse.json({ error: 'Login required.' }, { status: 401 }) }
+  }
+  // L3 fix: frozen accounts lose authenticated access everywhere; an admin
+  // must unfreeze before the user can act again (freeze also revokes sessions).
+  if (user.status !== 'ACTIVE') {
+    return { error: NextResponse.json({ error: 'Account frozen.' }, { status: 403 }) }
   }
   return { user }
 }

@@ -5,14 +5,18 @@ import { clientIp } from '@/lib/env'
 import { newToken, sha256 } from '@/lib/auth/session'
 import { sendPasswordResetEmail } from '@/lib/auth/email'
 import { limit, tooMany } from '@/lib/rate-limit'
+import { csrfBlocked } from '@/lib/http'
 
 export const dynamic = 'force-dynamic'
 
 const Schema = z.object({ email: z.string().trim().toLowerCase().email().max(200) })
 
 export async function POST(req: NextRequest) {
+  const csrf = csrfBlocked(req)
+  if (csrf) return csrf
+
   const ip = clientIp(req)
-  const rl = limit(`forgot:${ip}`, 5, 3600_000)
+  const rl = await limit(`forgot:${ip}`, 5, 3600_000)
   if (!rl.ok) return tooMany(rl.retryAfterSec)
 
   const body = await req.json().catch(() => null)

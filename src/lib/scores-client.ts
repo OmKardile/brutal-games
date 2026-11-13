@@ -6,13 +6,16 @@
 //    fall back to a per-browser localStorage leaderboard so the site is still
 //    fully playable with a "local board".
 //
+// Since 0.8, POST /api/scores requires an account (guests get the local
+// board — same as the static export); ranked submissions carry the run
+// token owned by run-session-client.
+//
 // All paths go through apiUrl() so the static build's basePath is respected.
 
-export const API_BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? ''
+import { apiUrl } from '@/lib/api-base'
+import { currentRunToken } from '@/lib/run-session-client'
 
-export function apiUrl(path: string): string {
-  return `${API_BASE}${path}`
-}
+export { API_BASE, apiUrl } from '@/lib/api-base'
 
 export type GameId = 'arena' | 'stack' | 'reflex' | 'dodge' | 'merge'
 
@@ -111,32 +114,65 @@ export interface SubmitPayload {
   kills: number
 }
 
+export interface SubmitResult {
+  ok: boolean
+  rank: number | null
+  board: BoardEntry[]
+  mode: 'online' | 'local'
+  /** true when the online board rejected us because we're not signed in —
+   *  the caller can show a "sign in to rank" hint */
+  authRequired?: boolean
+  /** false when the server stored the run display-only (no valid run token) */
+  ranked?: boolean
+}
+
 /** Submit a run. Online first; on static/offline deploys logs it locally. */
 export async function submitScore(
   game: GameId,
   payload: SubmitPayload,
-): Promise<{ ok: boolean; rank: number | null; board: BoardEntry[]; mode: 'online' | 'local' }> {
+): Promise<SubmitResult> {
   try {
     const res = await fetchWithTimeout(apiUrl('/api/scores'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...payload, game }),
+      body: JSON.stringify({ ...payload, game, runToken: currentRunToken() ?? undefined }),
     })
-    if (!res.ok) throw new Error(`status ${res.status}`)
-    const data = (await res.json()) as { rank?: number; scores?: BoardEntry[] }
-    return { ok: true, rank: data.rank ?? null, board: data.scores ?? [], mode: 'online' }
-  } catch {
-    const entry: BoardEntry = {
-      id: `local-${Date.now()}`,
-      name: payload.name,
-      score: payload.score,
-      wave: payload.wave,
-      kills: payload.kills,
-      game,
+    if (res.status === 401) {
+      // not signed in: local board, flagged so pages can show a sign-in hint
+      const entry = localEntry(game, payload)
+      const board = pushLocal(game, entry)
+      const rank = board.findIndex((e) => e.id === entry.id)
+      return { ok: true, rank: rank >= 0 ? rank + 1 : null, board, mode: 'local', authRequired: true }
     }
+    if (!res.ok) throw new Error(`status ${res.status}`)
+    const data = (await res.json()) as {
+      rank?: number
+      scores?: BoardEntry[]
+      ranked?: boolean
+    }
+    return {
+      ok: true,
+      rank: data.rank ?? null,
+      board: data.scores ?? [],
+      mode: 'online',
+      ranked: data.ranked ?? false,
+    }
+  } catch {
+    const entry = localEntry(game, payload)
     const board = pushLocal(game, entry)
     const rank = board.findIndex((e) => e.id === entry.id)
     return { ok: true, rank: rank >= 0 ? rank + 1 : null, board, mode: 'local' }
+  }
+}
+
+function localEntry(game: GameId, payload: SubmitPayload): BoardEntry {
+  return {
+    id: `local-${Date.now()}`,
+    name: payload.name,
+    score: payload.score,
+    wave: payload.wave,
+    kills: payload.kills,
+    game,
   }
 }
 

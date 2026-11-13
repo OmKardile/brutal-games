@@ -134,11 +134,30 @@ QA.md               pre-ship checklist (run before any game ships)
 - [technical-documentation.md](technical-documentation.md) — architecture, data model, APIs, security
 - [business-documentation.md](business-documentation.md) — reward program mechanics + admin runbook
 - [docs/threat-model.md](docs/threat-model.md) — security threat model + phased hardening plan
+- [SECURITY.md](SECURITY.md) — security controls overview, PR review checklist, disclosure contact
 - [decisions.md](decisions.md) — architecture decision records
 - [help.md](help.md) — player & admin FAQ
 - [CHANGELOG.md](CHANGELOG.md) — versioned history
 - [QA.md](QA.md) — pre-ship checklist (run before any game ships)
 - [compact.md](compact.md) — state summary for future sessions
+
+## Security & fair leaderboards
+
+The browser is hostile: every client-sent score, duration and heartbeat is
+untrusted. Since v0.8 (hardening phase 2):
+
+- **Global boards are account-gated.** Posting to `/api/scores` requires an
+  account; a RANKED entry additionally requires a server-issued run token
+  (`POST /api/run/start` at run start, single-use, validated against the
+  server-measured duration + manifest plausibility). Guests keep a per-browser
+  local board with a "sign in to rank" hint.
+- **Board names are account callsigns** — one per account, case-insensitive
+  unique, sanitized + blocklisted, settable on /rewards. No impersonation.
+- Passwords are argon2id (min 10 chars); login has per-account/per-IP
+  exponential-backoff lockout + captcha escalation; rate limiting persists in
+  SQLite; every mutation route checks Origin + JSON content-type; production
+  boots only with real secrets (`SESSION_SECRET`, `DAILY_SALT`).
+- Deploys behind a reverse proxy must set `TRUSTED_PROXY=1` (see .env.example).
 
 A fan tribute, not affiliated with ahwoo. Rewards payouts involve real money and require
 legal/tax review before going live — see business-documentation.md. Security hardening

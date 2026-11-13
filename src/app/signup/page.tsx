@@ -98,18 +98,19 @@ export default function SignupPage() {
             />
             <Input
               value={name}
-              onChange={(e) => setName(e.target.value.slice(0, 40))}
-              placeholder="CALLSIGN (OPTIONAL)"
+              onChange={(e) => setName(e.target.value.slice(0, 16))}
+              placeholder="CALLSIGN (OPTIONAL — YOUR BOARD NAME)"
+              maxLength={16}
               className="h-11 border-red-900/60 bg-black/60 tracking-widest placeholder:text-stone-700 focus-visible:ring-red-500"
               aria-label="Callsign"
             />
             <Input
               type="password"
               required
-              minLength={8}
+              minLength={10}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="PASSWORD (8+ CHARS)"
+              placeholder="PASSWORD (10+ CHARS)"
               className="h-11 border-red-900/60 bg-black/60 tracking-wide placeholder:text-stone-700 focus-visible:ring-red-500"
               aria-label="Password"
             />

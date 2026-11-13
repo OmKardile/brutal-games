@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { authUser } from '@/lib/auth/guard'
+import { csrfBlocked } from '@/lib/http'
 import { limit, tooMany } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
@@ -13,10 +14,13 @@ const Schema = z.object({
 
 /** 18+ declaration. Required before any points can be earned or paid out. */
 export async function POST(req: NextRequest) {
+  const csrf = csrfBlocked(req)
+  if (csrf) return csrf
+
   const { user, error } = await authUser()
   if (error) return error
 
-  const rl = limit(`consent:${user.id}`, 5, 3600_000)
+  const rl = await limit(`consent:${user.id}`, 5, 3600_000)
   if (!rl.ok) return tooMany(rl.retryAfterSec)
 
   const body = await req.json().catch(() => null)

@@ -81,9 +81,13 @@ player rewards program (monthly ad-revenue share, INR/UPI, manual payouts).
   reference ads; fraud flag-only; REWARDS_ENABLED default false.
 
 ## Environment (.env)
-DATABASE_URL, APP_URL (or RENDER_EXTERNAL_URL), SESSION_SECRET, DAILY_SALT
-(optional; falls back to SESSION_SECRET), TURNSTILE_SITE_KEY/SECRET_KEY,
-RESEND_API_KEY or BREVO_API_KEY + MAIL_FROM, GOOGLE_CLIENT_ID/SECRET,
+DATABASE_URL, APP_URL (or RENDER_EXTERNAL_URL), SESSION_SECRET (REQUIRED in
+prod, ≥32 chars — fail-hard), DAILY_SALT (falls back to SESSION_SECRET; required
+in prod), TRUSTED_PROXY=1 (behind any reverse proxy — rightmost-untrusted XFF
+parsing; unset = headers ignored, fail-safe), TRUSTED_PROXIES (extra CIDRs),
+TURNSTILE_SITE_KEY/SECRET_KEY, HIBP_CHECK=1 (optional breached-password
+rejection), NAME_BLOCKLIST (optional extra banned words), RESEND_API_KEY or
+BREVO_API_KEY + MAIL_FROM, GOOGLE_CLIENT_ID/SECRET,
 NEXT_PUBLIC_ANALYTICS_ENDPOINT/SITE (optional), NEXT_PUBLIC_CONSENT_BANNER
 (optional, default off).
 
@@ -100,18 +104,35 @@ NEXT_PUBLIC_ANALYTICS_ENDPOINT/SITE (optional), NEXT_PUBLIC_CONSENT_BANNER
   boards fall back to localStorage; daily runs → local UNRANKED. For correct
   absolute sitemap/canonicals set APP_URL to the Pages origin.
 
-## Security program (v0.7.1, active directive)
+## Security program (v0.8.0, active directive)
 - **docs/threat-model.md** is the contract: audit findings (C1-C3/H1-H8/M1-M9),
   20-card threat catalogue, phased plan §7. Phase 1 (audit + model) DONE.
-- Verified: `/api/scores` POST open + name-based (CRITICAL); rate limiter
-  in-memory; play-session token non-CSPRNG; heartbeat activity client-asserted;
-  admin = no 2FA/audit/self-approval block; secrets/history CLEAN; db not in
-  public/; engines non-deterministic (replay verification DEFERRED, phase 7).
+  **Phase 2 DONE (v0.8.0)** — ADR-021/022/023, SECURITY.md added.
+- Phase 2 shipped: argon2id + rehash-on-login + min-10 policy + optional HIBP;
+  per-account+per-IP login backoff lockout (5→15s→…→60min) + Turnstile after 3
+  fails + dummy-verify; PERSISTENT SQLite rate limiter (RateLimitBucket) +
+  trusted-proxy clientIp (rightmost untrusted XFF); CSRF Origin/Host + JSON
+  content-type on every mutation; SESSION_SECRET/DAILY_SALT fail-hard in prod;
+  freeze revokes sessions + authUser rejects frozen; /api/scores locked down
+  (session required; ranked needs run token from new /api/run/start — CSPRNG,
+  game-bound, single-use scoreClaimedAt claim, server-duration plausibility;
+  tokenless = display-only off the ranked board; guests = local board + sign-in
+  hint); board names = account callsigns (User.nameKey unique, sanitized,
+  reserved/leet/profanity policy; PILOT-XXXX auto-assign; set on /rewards);
+  GET/POST /api/auth/sessions (list + log out everywhere/others) + POST
+  /api/auth/profile; rewards/session/start = legacy compat wrapper; deps pruned
+  -21 (next-auth gone); tests 142 (was 102).
+- Still open from the audit: H2 headers (phase 6), H3 heartbeat client-asserted
+  (phase 3), H4 opaque token → HMAC+key-id (phase 3), H5 admin 2FA/audit/self-
+  approval (phase 5), H8 payout races (phase 5), M1 privacy hashing/retention
+  (phase 4), M3/M4 board integrity/moderation (phase 4), M6 payout gating
+  (phase 4/5), M7 monitoring/runbook (phase 6), M8 hygiene (partial: deps done,
+  gitleaks/audit cadence phase 8), M9 payouts kill switch (phase 5), L1 dead
+  /api route (phase 6).
 - Caddyfile ships a dev-only `?XTransformPort=` open local-proxy handler —
   must never reach production (phase 6 ships a hardened template).
 - Next phases (each: docs+CHANGELOG+tests, then WAIT FOR OK):
-  2 auth/API-baseline/persistent RL/lock down /api/scores → 3 signed run
-  sessions/heartbeat hardening/plausibility → 4 risk score/leaderboard
+  3 signed run sessions/heartbeat hardening/plausibility → 4 risk score/leaderboard
   integrity/device signals → 5 payout integrity/admin 2FA+audit/kill switch →
   6 headers/Caddy/backups/monitoring/runbook → 7 replay (deferred) →
   8 abuse-test suite + scans + red-team.
@@ -127,5 +148,5 @@ NEXT_PUBLIC_ANALYTICS_ENDPOINT/SITE (optional), NEXT_PUBLIC_CONSENT_BANNER
 - Standalone per-game export (self-contained dist/<slug>/index.html, <8 MB) —
   phase 6, on request only.
 - Google OAuth + email delivery untested end-to-end (no external creds).
-- Rate limiter + settings cache in-memory (single instance only).
+- Settings cache in-memory (single instance only); rate limiter now persistent.
 - Legal review before real payouts / consent banner activation / ads.txt.

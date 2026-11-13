@@ -2,24 +2,45 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { clientIp } from '@/lib/env'
-import { verifyPassword } from '@/lib/auth/password'
+import {
+  verifyPassword,
+  hashPassword,
+  needsRehash,
+  dummyVerify,
+} from '@/lib/auth/password'
 import { createSession, sessionCookieOptions, SESSION_COOKIE } from '@/lib/auth/session'
-import { limit, tooMany } from '@/lib/rate-limit'
+import {
+  limit,
+  tooMany,
+  getLockout,
+  recordFailure,
+  clearFailures,
+  LOGIN_LOCKOUT,
+} from '@/lib/rate-limit'
 import { registerDevice } from '@/lib/rewards/fraud'
 import { getSettings } from '@/lib/rewards/config'
+import { verifyTurnstile, turnstileEnabled } from '@/lib/captcha'
+import { csrfBlocked } from '@/lib/http'
 
 export const dynamic = 'force-dynamic'
 
 const LoginSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(200),
   password: z.string().min(1).max(200),
+  turnstileToken: z.string().optional(),
   signals: z.record(z.string(), z.unknown()).optional(),
 })
 
+/** consecutive account failures after which Turnstile is demanded */
+const CAPTCHA_AFTER_FAILS = 3
+
 export async function POST(req: NextRequest) {
+  const csrf = csrfBlocked(req)
+  if (csrf) return csrf
+
   const ip = clientIp(req)
   const ua = req.headers.get('user-agent') ?? ''
-  const rl = limit(`login:${ip}`, 10, 60_000)
+  const rl = await limit(`login:${ip}`, 10, 60_000)
   if (!rl.ok) return tooMany(rl.retryAfterSec)
 
   const body = await req.json().catch(() => null)
@@ -27,16 +48,67 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: 'Invalid login payload.' }, { status: 400 })
   }
-  const { email, password, signals } = parsed.data
+  const { email, password, turnstileToken, signals } = parsed.data
 
-  const user = await db.user.findUnique({ where: { email } })
-  const ok = user?.passwordHash
-    ? await verifyPassword(password, user.passwordHash)
-    : false
-  if (!user || !ok) {
-    return NextResponse.json({ error: 'Wrong email or password.' }, { status: 401 })
+  // per-account AND per-IP lockout with exponential backoff (M5 fix)
+  const acctKey = `loginfail:acct:${email}`
+  const ipKey = `loginfail:ip:${ip}`
+  const [acctLock, ipLock] = await Promise.all([
+    getLockout(acctKey, LOGIN_LOCKOUT),
+    getLockout(ipKey, LOGIN_LOCKOUT),
+  ])
+  const captchaRequired =
+    turnstileEnabled() && Math.max(acctLock.failCount, ipLock.failCount) >= CAPTCHA_AFTER_FAILS
+  const lock = acctLock.locked ? acctLock : ipLock
+  if (lock.locked) {
+    return NextResponse.json(
+      {
+        error: 'Too many failed attempts. Try again later.',
+        captchaRequired,
+        retryAfterSec: lock.retryAfterSec,
+      },
+      { status: 429, headers: { 'Retry-After': String(lock.retryAfterSec) } },
+    )
   }
 
+  if (captchaRequired) {
+    const ok = await verifyTurnstile(turnstileToken, req)
+    if (!ok) {
+      return NextResponse.json({ error: 'Captcha failed.', captchaRequired: true }, { status: 400 })
+    }
+  }
+
+  const user = await db.user.findUnique({ where: { email } })
+  let ok = false
+  if (user?.passwordHash) {
+    ok = await verifyPassword(password, user.passwordHash)
+  } else {
+    // constant-ish timing: burn the same KDF cost when the user is unknown
+    await dummyVerify()
+  }
+  if (!user || !ok) {
+    await Promise.all([recordFailure(acctKey, LOGIN_LOCKOUT), recordFailure(ipKey, LOGIN_LOCKOUT)])
+    const fails = Math.max(acctLock.failCount + 1, ipLock.failCount + 1)
+    return NextResponse.json(
+      {
+        error: 'Wrong email or password.',
+        captchaRequired: turnstileEnabled() && fails >= CAPTCHA_AFTER_FAILS,
+      },
+      { status: 401 },
+    )
+  }
+
+  // transparent hash upgrade (scrypt -> argon2id) on the Bun runtime
+  if (user.passwordHash && needsRehash(user.passwordHash)) {
+    try {
+      const upgraded = await hashPassword(password)
+      await db.user.update({ where: { id: user.id }, data: { passwordHash: upgraded } })
+    } catch (err) {
+      console.error('password rehash failed', err)
+    }
+  }
+
+  await Promise.all([clearFailures(acctKey), clearFailures(ipKey)])
   await db.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } })
 
   try {

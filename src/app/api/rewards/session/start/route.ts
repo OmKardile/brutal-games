@@ -5,19 +5,30 @@ import { authUser } from '@/lib/auth/guard'
 import { getSettings } from '@/lib/rewards/config'
 import { startPlaySession } from '@/lib/rewards/heartbeat'
 import { registerDevice, type DeviceSignals } from '@/lib/rewards/fraud'
+import { csrfBlocked } from '@/lib/http'
 import { limit, tooMany } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
 const Schema = z.object({
+  game: z.enum(['arena', 'stack', 'reflex', 'dodge', 'merge']).optional(),
   signals: z.record(z.string(), z.unknown()).optional(),
 })
 
+/**
+ * POST /api/rewards/session/start — LEGACY COMPAT wrapper (0.8).
+ * New clients call POST /api/run/start (same session, no rewards coupling).
+ * Kept so cached tabs keep working; delegates to the same lib. Gates on
+ * 18+/rewards stay here for back-compat; earning is enforced at award time.
+ */
 export async function POST(req: NextRequest) {
+  const csrf = csrfBlocked(req)
+  if (csrf) return csrf
+
   const { user, error } = await authUser()
   if (error) return error
 
-  const rl = limit(`session-start:${user.id}`, 30, 3600_000)
+  const rl = await limit(`session-start:${user.id}`, 30, 3600_000)
   if (!rl.ok) return tooMany(rl.retryAfterSec)
 
   if (!user.adultDeclaredAt) {
@@ -43,6 +54,11 @@ export async function POST(req: NextRequest) {
     console.error('registerDevice failed', err)
   }
 
-  const { token, intervalSec } = await startPlaySession(user.id, settings, ip)
+  const { token, intervalSec } = await startPlaySession(
+    user.id,
+    parsed.success ? (parsed.data.game ?? null) : null,
+    settings,
+    ip,
+  )
   return NextResponse.json({ token, intervalSec })
 }

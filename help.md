@@ -3,8 +3,21 @@
 ## Players
 
 **Do I need an account to play?**
-No. The game is fully playable without one. An account only unlocks the optional
-rewards program.
+No. The game is fully playable without one. An account unlocks the optional
+rewards program — and, since v0.8, posting to the GLOBAL leaderboard.
+
+**How do leaderboards work? (v0.8)**
+Signed-in players rank on the global board when their run is backed by a
+server-issued run token (issued automatically when a run starts and validated
+against the server's own clock). Guests still see the global board, but their
+own scores land on a per-browser LOCAL board — the game-over screen shows a
+"SIGN IN TO RANK ON THE GLOBAL BOARD" hint. Daily challenge boards work the
+same for everyone (seed-verified runs rank).
+
+**What's a callsign?**
+Your board name. It's tied to your account (one per player, case-insensitive
+unique), so nobody can post as you — or as "ADMIN". Set or change it on
+`/rewards`. Reserved words, hate speech and lookalike spellings are blocked.
 
 **How do I earn points?**
 Sign in, confirm you're 18+, and just play — with the tab visible and real input.
@@ -23,6 +36,12 @@ credited balance is at least the minimum (default ₹100; smaller balances carry
 Requests are held for a review period (default 14 days), then an admin approves and
 pays manually to your UPI. You'll see the status (PENDING → APPROVED → PAID) in the
 payout history.
+
+**How do I secure my account?**
+Use a password of at least 10 characters that you don't reuse. You can see every
+active session on `/rewards` and log out everywhere with one click. Repeated failed
+logins temporarily lock the account (protection against brute force) and may ask
+for a captcha.
 
 **Why did my points disappear / account freeze?**
 Confirmed fraud voids points: multiple accounts, bots, scripted activity, or forged run

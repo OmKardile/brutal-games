@@ -13,8 +13,11 @@ import {
 import { extendStreak, mergeStreaks, type StreakState } from '@/lib/daily/streaks'
 import { dailySeedFor, seedMatches } from '@/lib/daily/seed'
 import { dateKeyForTz, previousDateKey } from '@/lib/daily/tz'
+import { csrfBlocked } from '@/lib/http'
 import { limit, tooMany } from '@/lib/rate-limit'
 import { getSessionUser } from '@/lib/auth/session'
+import { clientIp } from '@/lib/env'
+import { sanitizeNameInput, namePolicyError, claimDisplayName } from '@/lib/names'
 import { db } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
@@ -48,8 +51,16 @@ const RunSchema = z.object({
  * size-capped but NOT replay-verified in v1 (documented limitation).
  */
 export async function POST(req: NextRequest) {
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'local'
-  if (!limit(`daily-run:${ip}`, 12, 60_000).ok) return tooMany(60)
+  const csrf = csrfBlocked(req)
+  if (csrf) return csrf
+
+  const ip = clientIp(req)
+  if (!(await limit(`daily-run:${ip}`, 12, 60_000)).ok) return tooMany(60)
+  // M3 partial fix: per-user cap on top of the per-IP bucket
+  const preUser = await getSessionUser()
+  if (preUser && !(await limit(`daily-run:user:${preUser.id}`, 12, 60_000)).ok) {
+    return tooMany(60)
+  }
 
   let body: unknown
   try {
@@ -90,9 +101,27 @@ export async function POST(req: NextRequest) {
   // ranking: only runs on the exact server seed count as ranked
   const ranked = run.ranked && seedMatches(run.game, run.dateKey, run.seed)
 
-  const user = await getSessionUser()
-  const name = (run.name || 'ANON').slice(0, 16).toUpperCase()
-  const userId = user && user.status === 'ACTIVE' ? user.id : null
+  const activeUser = preUser && preUser.status === 'ACTIVE' ? preUser : null
+
+  // board name: account callsign for signed-in players (uniqueness by
+  // nameKey); policy-checked sanitized name for guests (M2 fix)
+  let name: string
+  if (activeUser) {
+    const claimed = await claimDisplayName(activeUser.id, null)
+    if (claimed.ok) {
+      name = claimed.name
+    } else {
+      return NextResponse.json({ error: claimed.reason ?? 'Could not set a callsign.' }, { status: 400 })
+    }
+  } else {
+    const clean = sanitizeNameInput(run.name || 'ANON')
+    const policyErr = namePolicyError(clean || 'ANON')
+    if (policyErr) {
+      return NextResponse.json({ error: policyErr }, { status: 400 })
+    }
+    name = clean.toUpperCase()
+  }
+  const userId = activeUser?.id ?? null
 
   // log stored size-capped (plain string cap; compression happens client-side)
   const logCap = cfg.DAILY_INPUT_LOG_MAX_CHARS

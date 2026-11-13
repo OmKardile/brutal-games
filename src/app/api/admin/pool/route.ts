@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import { requireAdmin } from '@/lib/auth/guard'
 import { getSettings } from '@/lib/rewards/config'
 import { lockMonth } from '@/lib/rewards/payouts'
+import { csrfBlocked } from '@/lib/http'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,6 +33,9 @@ export async function GET() {
 
 /** Save revenue for a month (DRAFT upsert), or lock a month. */
 export async function POST(req: NextRequest) {
+  const csrf = csrfBlocked(req)
+  if (csrf) return csrf
+
   const { user: admin, error } = await requireAdmin()
   if (error) return error
 

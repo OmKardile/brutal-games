@@ -2,7 +2,8 @@
 
 // Rewards HUD for the play page. Completely passive for gameplay:
 // - counts real input events (keydown/pointer) on the window
-// - opens a play session when a run starts
+// - uses the SHARED run-session token (run-session-client) — the game page
+//   opens the session at run start; no separate rewards session since 0.8
 // - sends a heartbeat every interval while playing (tab visible + input = active)
 // - sends run stats at gameover for run-completion + daily-challenge points
 // Renders a small chip top-left; renders nothing when rewards are disabled.
@@ -11,6 +12,7 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import type { GamePhase, RunStats } from '@/game/types'
 import { useToast } from '@/hooks/use-toast'
+import { subscribeRunToken } from '@/lib/run-session-client'
 import { Coins } from 'lucide-react'
 
 interface Props {
@@ -83,39 +85,16 @@ export function RewardsHud({ phase, lastStats }: Props) {
     }
   }
 
-  // run lifecycle
+  // run lifecycle — the game page calls beginRun(); we pick up the token
+  useEffect(() => {
+    const unsub = subscribeRunToken((t) => {
+      tokenRef.current = t
+    })
+    return unsub
+  }, [])
+
   useEffect(() => {
     if (enabled !== true) return
-    if (phase === 'playing' && !tokenRef.current && userId) {
-      void (async () => {
-        try {
-          const res = await fetch('/api/rewards/session/start', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              signals: {
-                language: navigator.language,
-                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                screen: `${window.screen.width}x${window.screen.height} x${window.devicePixelRatio}`,
-                platform: (navigator as unknown as { platform?: string }).platform ?? '',
-                hardwareConcurrency: navigator.hardwareConcurrency,
-                deviceMemory: (navigator as unknown as { deviceMemory?: number }).deviceMemory,
-              },
-            }),
-          })
-          if (res.ok) {
-            const data = (await res.json()) as { token: string }
-            tokenRef.current = data.token
-          } else if (res.status === 401) {
-            setUserId(null) // not signed in — stay quiet
-          } else {
-            tokenRef.current = null // 403 consent/disabled — no session
-          }
-        } catch {
-          // offline — play on without rewards
-        }
-      })()
-    }
 
     if (phase !== 'playing' && tokenRef.current && phase !== 'paused' && phase !== 'upgrade') {
       // run ended (gameover or quit) — send stats once, clear token

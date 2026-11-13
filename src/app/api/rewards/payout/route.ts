@@ -5,6 +5,7 @@ import { authUser } from '@/lib/auth/guard'
 import { getSettings } from '@/lib/rewards/config'
 import { createPayoutRequest, rewardBalance } from '@/lib/rewards/payouts'
 import { verifyTurnstile } from '@/lib/captcha'
+import { csrfBlocked } from '@/lib/http'
 import { limit, tooMany } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
@@ -31,10 +32,13 @@ export async function GET() {
 
 /** Request a payout. Captcha + verified email + 18+ + UPI + hold period. */
 export async function POST(req: NextRequest) {
+  const csrf = csrfBlocked(req)
+  if (csrf) return csrf
+
   const { user, error } = await authUser()
   if (error) return error
 
-  const rl = limit(`payout:${user.id}`, 3, 86_400_000)
+  const rl = await limit(`payout:${user.id}`, 3, 86_400_000)
   if (!rl.ok) return tooMany(rl.retryAfterSec)
 
   const body = await req.json().catch(() => null)

@@ -5,6 +5,16 @@ changed in this phase. Audit basis: clean tree at `df2716a`, v0.7.0, 102/102
 tests green. Every claim below was verified against the current source in
 Nov 2026; file references are live code paths.
 
+> **STATUS UPDATE — phase 2 SHIPPED (v0.8.0):** C1, C3, H1, H6, H7, M2, M5,
+> L2, L3 are FIXED (argon2id + login lockout/escalation, persistent SQLite
+> rate limiting, trusted-proxy clientIp, CSRF baseline on all mutations,
+> fail-hard production secrets, /api/scores lock-down with run tokens,
+> account-callsign board names, freeze kills sessions, sessions/profile
+> endpoints, SECURITY.md, deps pruned). H3, H4 are PARTIALLY fixed (CSPRNG
+> token + unified run sessions landed; HMAC binding, key-id rotation, nonce
+> chains and statistics remain phase 3). See ADR-021/022/023, CHANGELOG 0.8.0.
+> Route table below reflects the PRE-0.8 state and is refreshed at each gate.
+
 Core principle (governs everything below): **the browser is hostile.** Anything
 the client sends — scores, durations, heartbeats, "tab is visible", localStorage
 XP — is untrusted. Strongest controls live server-side and on the payout path.

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSettings, updateSettings, type RewardSettings } from '@/lib/rewards/config'
 import { requireAdmin } from '@/lib/auth/guard'
+import { csrfBlocked } from '@/lib/http'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,6 +12,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const csrf = csrfBlocked(req)
+  if (csrf) return csrf
+
   const { error } = await requireAdmin()
   if (error) return error
 

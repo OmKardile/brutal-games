@@ -3,6 +3,98 @@
 All notable changes to BRUTAL//GAMES. Dates are UTC. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions are ours, not semver-strict.
 
+## [0.8.0] — 2026-11-13
+
+### Security — hardening program phase 2 (auth/session + API baseline + persistent rate limiting + `/api/scores` lock-down)
+
+Closes the CRITICAL/HIGH findings C1, C3, H1, H6, H7 and mediums M2, M5 (+ L2,
+L3) from docs/threat-model.md. `REWARDS_ENABLED` stays false. Full rationale in
+ADR-021/022/023; operational summary in the new SECURITY.md.
+
+**Passwords & login**
+- argon2id via `Bun.password` for all new hashes; legacy scrypt hashes stay
+  verifiable and are transparently rehashed on login (Bun runtime). Minimum
+  length 10, no composition rules. Optional breached-password rejection via
+  HIBP k-anonymity (`HIBP_CHECK=1`, off by default, fails open).
+- Login brute-force defense: per-account AND per-IP consecutive-failure
+  lockout with exponential backoff (5 fails → 15s, doubling to a 60min cap,
+  15min decay), Turnstile demanded after 3 failures, dummy-verify so unknown
+  emails cost the same KDF time (enumeration-timing fix).
+- Freeze now revokes every session immediately; frozen accounts are rejected
+  by `authUser()` everywhere (was: frozen users kept browsing).
+
+**Rate limiting & IPs**
+- Persistent SQLite-backed limiter (`RateLimitBucket` table) — survives
+  restarts/spin-ups. Same buckets as before plus per-user daily-run,
+  score-submit, run-start, profile buckets. Login lockout state persists too.
+- Trusted-proxy `clientIp()`: without `TRUSTED_PROXY=1`, forwarding headers
+  are ignored entirely (fail-safe); with it, the client IP is the rightmost
+  untrusted `X-Forwarded-For` hop (private ranges + `TRUSTED_PROXIES`
+  skipped) — spoofed leftmost entries never win. Reset endpoint moved to a
+  per-IP bucket (was a single global bucket).
+
+**CSRF & API baseline**
+- Every state-changing route now checks the Origin/Host allowlist (with
+  Sec-Fetch-Site/Referer fallbacks) AND requires `Content-Type:
+  application/json` — one shared `csrfBlocked()` helper (auth, rewards,
+  daily-run, scores, admin routes).
+- `SESSION_SECRET` (≥32 chars) and `DAILY_SALT` fail HARD in production —
+  no insecure code fallbacks anymore.
+- Password reset (per-IP bucket) + signup + profile routes get the same
+  breached-password option; Prisma query logging is dev-only now.
+
+**Leaderboard lock-down (C3)**
+- `POST /api/scores` requires an account. New `POST /api/run/start` opens a
+  run session (CSPRNG token, game-bound, one active run per account, aborts
+  the previous) — the SAME session powers rewards heartbeats (RewardsHud now
+  shares it) and score submission.
+- RANKED entries must present the run token: single-use claim
+  (`scoreClaimedAt`, order-independent from rewards run-end), validated
+  against the server-measured duration with the manifest plausibility
+  ceiling. Tokenless entries are stored display-only and excluded from the
+  competitive board + totals.
+- Guests on dynamic deploys fall back to the per-browser local board (same
+  as the static export) with a "SIGN IN TO RANK ON THE GLOBAL BOARD" hint on
+  the game-over screen.
+- Board names are now ACCOUNT CALLSIGNS (`User.nameKey`, case-insensitive
+  unique): sanitized (control/zero-width/bidi stripped), reserved names
+  (leet-aware: ADM1N/4dmin blocked) and a profanity blocklist (extend via
+  `NAME_BLOCKLIST`). First ranked post auto-assigns PILOT-XXXX; set/change
+  your callsign on /rewards. Impersonation on boards is structurally gone.
+
+**Account management**
+- New `GET/POST /api/auth/sessions`: list active sessions, "log out others" /
+  "log out everywhere" (full invalidation). New `POST /api/auth/profile`:
+  set/change the callsign. Both surfaced on /rewards.
+- Login page renders Turnstile when the server escalates after repeated
+  failures.
+
+**Hygiene**
+- Dependency prune (-21): next-auth (installed-but-unused per ADR-003),
+  next-intl, @mdxeditor/editor, react-syntax-highlighter, recharts, cmdk,
+  vaul, react-day-picker, embla-carousel, input-otp, uuid, dnd-kit ×3,
+  @tanstack/react-query + react-table, zustand, react-markdown,
+  @reactuses/core, date-fns, framer-motion; six unused shadcn ui components
+  removed with them.
+- New SECURITY.md (controls overview, PR security-review checklist,
+  responsible-disclosure contact). .env.example documents TRUSTED_PROXY,
+  TRUSTED_PROXIES, HIBP_CHECK, NAME_BLOCKLIST + production secret rules.
+
+**Tests**: 142 pass (was 102). New: `tests/auth-hardening.test.ts` (argon2id
+round-trip + legacy verify + rehash flags + policy, name sanitization/reserved/
+blocklist/nameKey, CSRF origin/content-type matrix, backoff math),
+`tests/rate-limit.test.ts` (sliding window, restart persistence, lockout
+record/get/clear), `tests/scores-service.test.ts` (ranked-with-token,
+tokenless display-only, token replay burned, foreign token, game mismatch,
+aborted session, implausible score, callsign claim/uniqueness/auto-assign,
+ranked-only boards, run-end/score-claim order independence).
+
+### Changed
+- README (security section + leaderboard rules), technical-documentation
+  (new routes, schema, env vars), decisions.md (ADR-021/022/023), help.md
+  (player-facing board changes), compact.md snapshot, threat-model.md
+  (phase-2 findings marked fixed). Rewards remain OFF until phases 2-6+8 pass.
+
 ## [0.7.1] — 2026-11-13
 
 ### Added — security program phase 1: audit + threat model (docs only, no code changes)

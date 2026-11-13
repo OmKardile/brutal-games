@@ -2,27 +2,36 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { clientIp } from '@/lib/env'
-import { hashPassword } from '@/lib/auth/password'
+import {
+  hashPassword,
+  validatePasswordPolicy,
+  isBreachedPassword,
+} from '@/lib/auth/password'
 import { createSession, sessionCookieOptions, SESSION_COOKIE, newToken, sha256 } from '@/lib/auth/session'
 import { sendVerificationEmail } from '@/lib/auth/email'
 import { verifyTurnstile } from '@/lib/captcha'
 import { limit, tooMany } from '@/lib/rate-limit'
 import { registerDevice } from '@/lib/rewards/fraud'
 import { getSettings } from '@/lib/rewards/config'
+import { sanitizeNameInput, namePolicyError, nameKeyOf } from '@/lib/names'
+import { csrfBlocked } from '@/lib/http'
 
 export const dynamic = 'force-dynamic'
 
 const SignupSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(200),
-  password: z.string().min(8).max(200),
+  password: z.string().min(1).max(200),
   name: z.string().trim().min(1).max(40).optional(),
   turnstileToken: z.string().optional(),
   signals: z.record(z.string(), z.unknown()).optional(),
 })
 
 export async function POST(req: NextRequest) {
+  const csrf = csrfBlocked(req)
+  if (csrf) return csrf
+
   const ip = clientIp(req)
-  const rl = limit(`signup:${ip}`, 5, 3600_000)
+  const rl = await limit(`signup:${ip}`, 5, 3600_000)
   if (!rl.ok) return tooMany(rl.retryAfterSec)
 
   const body = await req.json().catch(() => null)
@@ -30,10 +39,37 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: 'Invalid signup payload.' }, { status: 400 })
   }
-  const { email, password, name, turnstileToken, signals } = parsed.data
+  const { email, password, turnstileToken, signals } = parsed.data
+
+  // password policy: length only (10+), no composition rules
+  const policy = validatePasswordPolicy(password)
+  if (policy) return NextResponse.json({ error: policy }, { status: 400 })
+
+  // optional breached-password check (k-anonymity HIBP; fails open)
+  const breached = await isBreachedPassword(password)
+  if (breached === true) {
+    return NextResponse.json(
+      { error: 'This password appears in a public breach list. Choose a different one.' },
+      { status: 400 },
+    )
+  }
 
   if (!(await verifyTurnstile(turnstileToken, req))) {
     return NextResponse.json({ error: 'Captcha failed.' }, { status: 400 })
+  }
+
+  // callsign policy + case-insensitive uniqueness (M2 fix)
+  let name: string | undefined
+  let nameKey: string | undefined
+  if (parsed.data.name) {
+    const clean = sanitizeNameInput(parsed.data.name)
+    const err = namePolicyError(clean)
+    if (err) return NextResponse.json({ error: err }, { status: 400 })
+    const key = nameKeyOf(clean)
+    const taken = await db.user.findFirst({ where: { nameKey: key }, select: { id: true } })
+    if (taken) return NextResponse.json({ error: 'That callsign is already taken.' }, { status: 409 })
+    name = clean
+    nameKey = key
   }
 
   const existing = await db.user.findUnique({ where: { email } })
@@ -43,7 +79,7 @@ export async function POST(req: NextRequest) {
   }
 
   const user = await db.user.create({
-    data: { email, name, passwordHash: await hashPassword(password) },
+    data: { email, name, nameKey, passwordHash: await hashPassword(password) },
   })
 
   // device fingerprint + fraud signals (flag-only, never blocks signup)

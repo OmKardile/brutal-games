@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { authUser } from '@/lib/auth/guard'
 import { getSettings } from '@/lib/rewards/config'
 import { awardRunCompletion } from '@/lib/rewards/runs'
+import { csrfBlocked } from '@/lib/http'
 import { limit, tooMany } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
@@ -16,10 +17,13 @@ const Schema = z.object({
 })
 
 export async function POST(req: NextRequest) {
+  const csrf = csrfBlocked(req)
+  if (csrf) return csrf
+
   const { user, error } = await authUser()
   if (error) return error
 
-  const rl = limit(`run-end:${user.id}`, 30, 3600_000)
+  const rl = await limit(`run-end:${user.id}`, 30, 3600_000)
   if (!rl.ok) return tooMany(rl.retryAfterSec)
 
   const body = await req.json().catch(() => null)

@@ -24,10 +24,12 @@ model HighScore {
   kills     Int
   // which game the run belongs to: arena | stack | reflex | dodge | merge
   game      String   @default("arena")
+  userId    String? // set for authenticated submissions (0.8+)
+  ranked    Boolean  @default(true) // false = display-only (no valid run token)
   createdAt DateTime @default(now())
 
   @@index([score])
-  @@index([game, score])
+  @@index([game, ranked, score])
 }
 
 // ------------------------------------------------------------------ identity
@@ -36,8 +38,9 @@ model User {
   id              String    @id @default(cuid())
   email           String    @unique
   emailVerified   DateTime? // null until the verification link is clicked
-  passwordHash    String? // scrypt; null only if/when OAuth-only accounts exist
-  name            String?
+  passwordHash    String? // argon2id (Bun) for new hashes; legacy scrypt still verifiable
+  name            String? // display callsign shown on ranked boards
+  nameKey         String?   @unique // uppercase normalized name — one callsign per account, one account per callsign
   role            String    @default("PLAYER") // PLAYER | ADMIN
   status          String    @default("ACTIVE") // ACTIVE | FROZEN
   adultDeclaredAt DateTime? // 18+ declaration; null = cannot earn or request payouts
@@ -72,6 +75,24 @@ model Session {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+// ------------------------------------------------------------------ rate limiting / lockout
+
+// Persistent rate-limit + lockout state (survives restarts — replaces the
+// pre-0.8 in-memory Map). One row per bucket key.
+//   hits:       JSON array of ms timestamps — sliding-window rate limiting
+//   failCount:  consecutive failures — exponential-backoff lockout (login)
+//   lockedUntil: backoff lock expiry; null = not locked
+// Purged opportunistically when untouched for 24h.
+model RateLimitBucket {
+  key         String    @id
+  hits        String    @default("[]")
+  failCount   Int       @default(0)
+  lockedUntil DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  @@index([updatedAt])
 }
 
 // One-time tokens for email verification and password reset.
@@ -129,18 +150,23 @@ model DailyActivity {
   @@index([date])
 }
 
-// A play session is opened by the client when a run starts; the server returns
-// a signed token. Heartbeats must present this token. Server timestamps only.
+// A run session is opened when a run starts (POST /api/run/start); the server
+// returns an opaque CSPRNG token. Heartbeats and score submission must present
+// this token. Server timestamps only. One open session per user; a new run
+// aborts the previous. `scoreClaimedAt` makes the token single-use for ranked
+// score submission while rewards run-end uses `endedAt` — order-independent.
 model PlaySession {
   id         String    @id @default(cuid())
   userId     String
   user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   tokenHash  String    @unique
+  game       String? // slug of the game being run (arena | stack | ...)
   startedAt  DateTime  @default(now())
   lastBeatAt DateTime?
   endedAt    DateTime?
   endedReason String?  // RUN_END | EXPIRED | ABORTED
   beats      Int       @default(0)
+  scoreClaimedAt DateTime? // set when a ranked score was submitted against this run
   ip         String?
   createdAt  DateTime  @default(now())
 
