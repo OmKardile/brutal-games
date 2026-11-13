@@ -133,6 +133,7 @@ QA.md               pre-ship checklist (run before any game ships)
 
 - [technical-documentation.md](technical-documentation.md) — architecture, data model, APIs, security
 - [business-documentation.md](business-documentation.md) — reward program mechanics + admin runbook
+- [docs/threat-model.md](docs/threat-model.md) — security threat model + phased hardening plan
 - [decisions.md](decisions.md) — architecture decision records
 - [help.md](help.md) — player & admin FAQ
 - [CHANGELOG.md](CHANGELOG.md) — versioned history
@@ -140,4 +141,6 @@ QA.md               pre-ship checklist (run before any game ships)
 - [compact.md](compact.md) — state summary for future sessions
 
 A fan tribute, not affiliated with ahwoo. Rewards payouts involve real money and require
-legal/tax review before going live — see business-documentation.md.
+legal/tax review before going live — see business-documentation.md. Security hardening
+is in progress per [docs/threat-model.md](docs/threat-model.md); `REWARDS_ENABLED` stays
+off until the phased plan's gates pass.

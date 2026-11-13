@@ -3,6 +3,36 @@
 All notable changes to BRUTAL//GAMES. Dates are UTC. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions are ours, not semver-strict.
 
+## [0.7.1] — 2026-11-13
+
+### Added — security program phase 1: audit + threat model (docs only, no code changes)
+- **`docs/threat-model.md`**: full security audit of the current codebase —
+  assets, attacker profiles, complete route inventory (auth/rate-limit/
+  validation per route), 20-card threat catalogue with impact / current
+  mitigation / residual risk / planned layer, economics-of-cheating analysis,
+  standing rules, residual-risk register, and the phased hardening plan
+  (phases 2-8) that gates `REWARDS_ENABLED`.
+- Audit verdicts on the suspected list: `/api/scores` POST confirmed open +
+  name-based (CRITICAL, phase 2); pilot XP confirmed localStorage-only and
+  value-free (rule written down); next-auth confirmed installed-but-unused
+  (prune in phase 2); rate limiter confirmed in-memory (persistent SQLite
+  limiter in phase 2); secrets scan of repo + full git history clean;
+  `db/custom.db` NOT reachable from public/; engines confirmed
+  non-deterministic (131 Math.random/Date.now uses — replay verification
+  honestly deferred, phase 7).
+- New findings ranked: SESSION_SECRET production fallback (C1), Caddyfile
+  `XTransformPort` open local proxy (C2), no security headers (H2),
+  client-asserted heartbeat activity (H3), non-CSPRNG play-session token (H4),
+  admin gaps — no 2FA/audit log/self-approval block (H5), payout create/approve
+  races (H8), unsalted fingerprints + raw-IP retention (M1), and more — each
+  mapped to a phase in the plan.
+- decisions.md: ADR-020 (layered anti-cheat program, browser-is-hostile
+  principle, replay-verification prerequisite, rewards gating).
+
+### Changed
+- README + technical documentation link the threat model; compact.md snapshot
+  updated to 0.7.1. help.md: no player/admin-facing change in this release.
+
 ## [0.7.0] — 2026-11-13
 
 ### Added — reusable game framework + portal + daily challenges

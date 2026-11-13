@@ -173,3 +173,37 @@ action). Games lazy-load on Play click so the SEO page stays fast (CWV: the
 game container reserves its aspect ratio). OG images generated locally
 (`bun run og:gen`). **Consequence:** adding a game requires authoring real
 copy — autogen/thin pages are banned by policy.
+
+## ADR-020 — Layered security & anti-cheat program (threat model as the contract)
+
+Date: 2026-11-13 · Status: accepted
+
+**Context.** The project pays real money (INR/UPI, ad-revenue share) and runs
+public leaderboards — a cheating target. A full audit (docs/threat-model.md,
+v0.7.1) confirmed `/api/scores` is open and name-based, the rate limiter is
+in-memory, play-session tokens are not CSPRNG, heartbeat activity is
+client-asserted, and the admin surface has no 2FA/audit log — while the
+ledger/pool math underneath is solid and tested.
+
+**Decision.**
+1. The browser is hostile: every client-sent value (scores, durations,
+   heartbeats, visibility, localStorage XP) is untrusted. Server-side and
+   payout-path controls come first; no effort on client obfuscation.
+2. Hardening proceeds in layers via the phased plan in docs/threat-model.md
+   (§7), each phase ending with docs + CHANGELOG + tests and an explicit OK
+   gate. Never rewrite working features — controls wrap the existing libs.
+3. `REWARDS_ENABLED` stays false until phases 2-6 and 8 pass; a
+   `REWARDS_PAYOUTS_PAUSED` kill switch ships in phase 5.
+4. Replay verification (strongest anti-cheat layer) is DEFERRED until engines
+   are deterministic (fixed timestep, seeded logic RNG — 131 Math.random/
+   Date.now uses today). Until then: plausibility + statistics + review only.
+   We document the gap; we never fake the layer.
+5. localStorage stays cosmetic forever: pilot XP/achievements never carry
+   value; anything earning points writes only to the server ledger.
+6. Fraud signals flag for human review; the only automated action is a HOLD
+   (freeze pending review) at high risk — never auto-bans, appeal path exists.
+
+**Consequences.** Leaderboard submissions become session/token-gated (guests
+keep the local-board fallback, mirroring the static export). Admin flows gain
+2FA + audit logs. Persistent rate limiting and hashed device signals add two
+small tables. The threat model is a living document, updated at every gate.

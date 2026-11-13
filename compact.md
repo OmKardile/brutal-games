@@ -1,6 +1,6 @@
 # compact.md — project state snapshot
 
-Last updated: 2026-11-13 (v0.7.0 — game framework + portal + daily challenges). Read this before working in the repo.
+Last updated: 2026-11-13 (v0.7.1 — security program phase 1: audit + threat model). Read this before working in the repo.
 
 ## What this is
 BRUTAL//GAMES — Next.js 16 browser arcade (fan tribute to github.com/ahwootech/BRUTAL):
@@ -99,6 +99,26 @@ NEXT_PUBLIC_ANALYTICS_ENDPOINT/SITE (optional), NEXT_PUBLIC_CONSENT_BANNER
 - **GitHub Pages (static arcade):** STATIC_EXPORT=1 build; API routes stripped;
   boards fall back to localStorage; daily runs → local UNRANKED. For correct
   absolute sitemap/canonicals set APP_URL to the Pages origin.
+
+## Security program (v0.7.1, active directive)
+- **docs/threat-model.md** is the contract: audit findings (C1-C3/H1-H8/M1-M9),
+  20-card threat catalogue, phased plan §7. Phase 1 (audit + model) DONE.
+- Verified: `/api/scores` POST open + name-based (CRITICAL); rate limiter
+  in-memory; play-session token non-CSPRNG; heartbeat activity client-asserted;
+  admin = no 2FA/audit/self-approval block; secrets/history CLEAN; db not in
+  public/; engines non-deterministic (replay verification DEFERRED, phase 7).
+- Caddyfile ships a dev-only `?XTransformPort=` open local-proxy handler —
+  must never reach production (phase 6 ships a hardened template).
+- Next phases (each: docs+CHANGELOG+tests, then WAIT FOR OK):
+  2 auth/API-baseline/persistent RL/lock down /api/scores → 3 signed run
+  sessions/heartbeat hardening/plausibility → 4 risk score/leaderboard
+  integrity/device signals → 5 payout integrity/admin 2FA+audit/kill switch →
+  6 headers/Caddy/backups/monitoring/runbook → 7 replay (deferred) →
+  8 abuse-test suite + scans + red-team.
+- REWARDS_ENABLED stays FALSE until phases 2-6 + 8 pass (ADR-020).
+- Standing rules: localStorage never carries value; server clock decides
+  durations; authz only in route handlers (no middleware exists — keep it);
+  flags not auto-bans (only auto-HOLD at high risk); engines untouched.
 
 ## Known gaps / next steps
 - Engine migration onto the kit loop (proposed separately — unlocks full

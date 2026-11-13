@@ -71,6 +71,11 @@ signup 5/h/IP, heartbeat 10/min + interval check, payout 3/day, session starts 3
 
 ## Security notes
 
+- **Threat model + phased hardening plan: [docs/threat-model.md](docs/threat-model.md)**
+  (v0.7.1). Audit verdicts: `/api/scores` POST is open and name-based (lock-down
+  planned); rate limiter is in-memory; play-session tokens are not CSPRNG;
+  engines are non-deterministic, so replay verification is deferred. Rewards
+  stay disabled until the plan's phase gates pass.
 - Passwords: node:crypto scrypt (N=16384), `timingSafeEqual` verification.
 - Sessions: 32-byte random tokens, httpOnly/SameSite=Lax cookies, sha256 at rest,
   reset kills all sessions.
