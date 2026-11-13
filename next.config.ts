@@ -18,7 +18,21 @@ const nextConfig: NextConfig = {
         images: { unoptimized: true },
         ...(basePath ? { basePath, assetPrefix: basePath } : {}),
       }
-    : { output: "standalone" as const }),
+    : {
+        output: "standalone" as const,
+        // legacy game routes -> portal pages (query strings preserved for
+        // deep links like /play?wave=5). The static export skips these —
+        // there the old routes exist as meta-refresh redirect stub pages.
+        async redirects() {
+          return [
+            { source: "/play", destination: "/games/arena", permanent: true },
+            { source: "/stack", destination: "/games/stack", permanent: true },
+            { source: "/reflex", destination: "/games/reflex", permanent: true },
+            { source: "/dodge", destination: "/games/dodge", permanent: true },
+            { source: "/merge", destination: "/games/merge", permanent: true },
+          ];
+        },
+      }),
   typescript: {
     ignoreBuildErrors: true,
   },

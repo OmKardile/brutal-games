@@ -3,6 +3,8 @@ import { Anton, Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/lib/theme";
+import { ConsentBanner } from "@/components/portal/ConsentBanner";
+import { SITE_URL } from "@/lib/site";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -22,9 +24,13 @@ const anton = Anton({
 });
 
 export const metadata: Metadata = {
+  // resolves relative canonicals/OG images to absolute URLs
+  ...(SITE_URL ? { metadataBase: new URL(SITE_URL) } : {}),
   title: "BRUTAL//GAMES — 5 free browser games. pick your poison.",
   description:
     "Five free browser games in one brutal arcade: ARENA (twin-stick wave shooter), STACK (one-tap tower), REFLEX (timing strike), DODGE (one-button gauntlet) and MERGE (drop-merge chaos). Night and day modes, gamepad support, global leaderboards. No download.",
+  authors: [{ name: "Omkar Kardile", url: "https://omkardile.is-a.dev/" }],
+  creator: "Omkar Kardile",
   keywords: [
     "BRUTAL",
     "browser games",
@@ -47,7 +53,7 @@ export const metadata: Metadata = {
     title: "BRUTAL//GAMES — stop reading, start playing",
     description:
       "Five free browser games: a twin-stick shooter, a one-tap tower, a timing strike, a one-button gauntlet and a drop-merge pit. No download.",
-    images: [`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/images/arena_bg.jpg`],
+    images: [`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/og/site.png`],
     type: "website",
   },
 };
@@ -69,6 +75,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} ${anton.variable} antialiased bg-background text-foreground`}
       >
         <ThemeProvider>{children}</ThemeProvider>
+        <ConsentBanner />
         <Toaster />
       </body>
     </html>

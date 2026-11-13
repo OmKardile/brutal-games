@@ -538,7 +538,7 @@ export default function LandingPage() {
           </div>
           <div className="flex items-center gap-3">
             <ThemeToggle />
-            <Link href="/play" className="hidden sm:block">
+            <Link href="/games/arena" className="hidden sm:block">
               <Button className="h-9 border border-[var(--accent)] bg-[var(--accent)] px-5 text-xs font-black tracking-[0.2em] text-white hover:brightness-110">
                 <Play className="mr-1.5 h-3.5 w-3.5" /> PLAY NOW
               </Button>
@@ -616,7 +616,7 @@ export default function LandingPage() {
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <Link href="/play" className="w-full sm:w-auto">
+              <Link href="/games/arena" className="w-full sm:w-auto">
                 <Button
                   size="lg"
                   className="brutal-glow h-14 w-full border border-[var(--accent)] bg-[var(--accent)] px-10 text-base font-black tracking-[0.2em] text-white hover:brightness-110 sm:w-auto"
@@ -1010,7 +1010,7 @@ export default function LandingPage() {
                   {pilot.achievements.length}/{ACHIEVEMENTS.length} ACHIEVEMENTS
                 </div>
               </div>
-              <Link href="/play">
+              <Link href="/games/arena">
                 <Button
                   size="lg"
                   className="h-12 border border-amber-500 bg-amber-500 px-8 font-black tracking-[0.2em] text-black hover:bg-amber-400"
@@ -1033,7 +1033,7 @@ export default function LandingPage() {
               <span className="brutal-outline block">START DYING.</span>
             </h2>
             <div className="mt-10">
-              <Link href="/play">
+              <Link href="/games/arena">
                 <Button
                   size="lg"
                   className="brutal-glow h-16 border border-[var(--accent)] bg-[var(--accent)] px-14 text-lg font-black tracking-[0.25em] text-white hover:brightness-110"
@@ -1067,6 +1067,16 @@ export default function LandingPage() {
               )}
               <a href="#games" className="transition-colors hover:text-[var(--ink)]">ALL GAMES</a>
               <ThemeToggle />
+            </div>
+            <div className="mt-5 text-[10px] tracking-[0.2em] text-[var(--ink-faint)]">
+              <a
+                href="https://omkardile.is-a.dev/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline decoration-dotted underline-offset-4 transition-colors hover:text-[var(--ink-dim)]"
+              >
+                Designed &amp; developed by Omkar Kardile
+              </a>
             </div>
           </div>
         </div>

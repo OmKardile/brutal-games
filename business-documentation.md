@@ -76,3 +76,29 @@ This build is technically complete but **must not distribute real money** before
 
 Budget the pool from **net** revenue only. Treat the share percentage and caps as
 levers to keep the program sustainable; changes apply going forward.
+
+## Daily challenges & the rewards program (v0.7.0)
+
+Daily challenges are a retention feature, not a payout feature. Hard rules:
+
+- Daily leaderboard rank NEVER pays cash or points. Rewards stay
+  engagement-based (heartbeat play time, login streaks, run completions,
+  daily-challenge points as before) and are unaffected by daily rank.
+- The daily system and the ad pipeline never interact: the PortalAdapter's
+  ad slots are placeholders (no network is wired); analytics events go to an
+  optional privacy-friendly endpoint. Points never reference ads, ad views,
+  or daily rank.
+- Streaks (daily) and login streaks (rewards) are separate concepts and are
+  displayed separately; both roll over at IST midnight (daily tz is
+  configurable via PortalSetting).
+
+Portal readiness for ad networks (when revenue is planned):
+
+1. Pick the network(s); read their SDK docs; finish the adapter stubs.
+2. Legal review of the consent banner copy + ad disclosures (EU + India DPDP).
+3. Enable `NEXT_PUBLIC_CONSENT_BANNER=on`, ship `ads.txt` at the root.
+4. Set `NEXT_PUBLIC_ANALYTICS_ENDPOINT` (Plausible/Umami) for the event
+   vocabulary (game_load, play_start, run_end, daily_start, daily_complete,
+   share_click, ad_shown, ad_failed).
+5. Interstitial policy is already enforced in code (natural breaks, 90 s gap,
+   first-minute block, 5 s timeout) — configure gaps via PortalSetting.

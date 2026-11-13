@@ -124,3 +124,85 @@ Two supported targets share one codebase:
 base-path aware — `assetUrl()` from `src/lib/assets.ts`, or inline
 `process.env.NEXT_PUBLIC_BASE_PATH` in the engines. Root-absolute paths 404 on
 the Pages sub-path build (bug fixed in 0.4.1).
+
+## Game framework & portal (v0.7.0)
+
+### Architecture
+
+```
+/games/[slug] (SSR SEO page)
+  └── GameStage (client, poster → lazy runner)
+        └── src/games/<slug>/page.tsx (runner — full game UX)
+              ├── buildCtx()  → ctx { input, audio, adapter(rules), events, daily }
+              └── shim.ts createGame(ctx) → wraps the ENGINE (src/game/*, untouched)
+                    ├── daily seed → patched Math.random during the run
+                    ├── pause/resume → rAF gating (+ window resize nudge on fullscreen)
+                    └── phase transitions → adapter.gameplayStart/Stop (enforced)
+```
+
+Engines are never edited. The kit (`src/game-kit/`) owns: fixed-timestep loop,
+unified input (touch-action none, no long-press/zoom, first-input signal),
+canvas scaler (16:9, DPR ≤ 2, safe-area), audio host (unlock-on-gesture,
+persisted mute, auto-mute on blur, ad suppression), safe storage (memory
+fallback), seeded rng (independent logic/cosmetic streams), juice (trauma
+shake, particles, tweens, hit-stop; prefers-reduced-motion), pooling, dev perf
+overlay, and the input-log recorder.
+
+### PortalAdapter & enforced rules (`src/game-kit/adapter/`)
+
+One interface for ads/analytics/lifecycle. `createRuleEnforcedAdapter` wraps
+any implementation with the non-negotiables: gameplayStart only from stopped
+state and never during an ad; gameplayStop never back-to-back (queued during
+ads); interstitials only at natural breaks with a 90 s min gap and none in the
+first session minute; every ad race-times out at 5 s and the game continues;
+pause+mute hooks fire around every ad; rewarded ads grant in-game perks only.
+Noop (default) / OwnPortal (sendBeacon analytics, no network wired) / Poki +
+CrazyGames stubs (method names to be verified against official SDK docs at
+activation — never guessed).
+
+Rewards hookup: GameStage mounts the passive RewardsHud on EVERY game (was
+/play only); the adapter's phase signals and the heartbeat come from the same
+transitions. Points stay engagement-based; ads never appear in reward flows.
+
+### Daily challenges (`src/lib/daily/`)
+
+| Model | Role |
+|---|---|
+| `DailyRun` | append-only completed runs (game, dateKey, userId?, name, score, durationMs, seedUsed int32 (uint32 \| 0), ranked, capped inputLog) |
+| `DailyStreak` | per-user consecutive-day streak {current, longest, lastDateKey} |
+| `PortalSetting` | KV overrides: DAILY_TZ (default Asia/Kolkata), interstitial gaps, ad timeout, log cap |
+
+APIs: `GET /api/daily/seed?game=` (server seed; dateKey in configured tz),
+`POST /api/daily/run` (zod + 12/min/IP rate limit + today-only + plausibility
+vs manifest + seed-match; mismatch ⇒ stored UNRANKED),
+`GET /api/daily/board?game=&dateKey=`, `GET /api/daily/summary?game=`.
+
+Determinism posture (deliberate, documented): the shim seeds Math.random
+during a run — spawn sequences match the day's seed for everyone; frame timing
+does not (engines own variable-dt loops). Replay verification of stored input
+logs is NOT implemented in v1. Anti-cheat = plausibility ceilings + rate
+limits + seed checks + flag-only review, mirroring the rewards posture.
+
+### SEO layer
+
+Per-game SSG pages with unique 150-300 word copy, how-to-play (desktop /
+mobile / gamepad), tips, FAQ, related games, last-updated. JSON-LD:
+VideoGame+WebApplication co-typed, BreadcrumbList everywhere, ItemList on
+categories, WebSite+Organization on home/about. aggregateRating is never
+emitted (no real ratings — faking it risks manual action); FAQ markup is
+intentionally omitted. Dynamic `sitemap.xml` (lastmod from manifests) and
+`robots.ts` (blocks /api, /admin, /rewards, auth pages) use absolute URLs via
+`src/lib/site.ts` (APP_URL → RENDER_EXTERNAL_URL). OG/Twitter images are
+generated at 1200×630 via `bun run og:gen` (sharp, no webfonts). The game
+container reserves its aspect ratio (CLS-safe) and game chunks lazy-load on
+Play click — first paint ships zero game code.
+
+### Known limitations
+
+- `src/game/merge.ts(616)` has a pre-existing type error (v0.6.0); engines are
+  off-limits — to be fixed only in the proposed engine migration.
+- In-memory rate limiter/settings caches: single-instance only.
+- Guest streak merge is an approximation (we keep {current, longest,
+  lastDateKey}, not day-sets).
+- Poki/CrazyGames stubs are unimplemented by policy until their official docs
+  are consulted.

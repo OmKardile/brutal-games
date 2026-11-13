@@ -90,7 +90,9 @@ export async function recordDailyRun(db: PrismaClient, run: RecordRunInput): Pro
       name: run.name,
       score: run.score,
       durationMs: run.durationMs,
-      seedUsed: run.seedUsed,
+      // uint32 seed → int32 storage (SQLite INT is signed 32-bit);
+      // read back with `>>> 0` to recover the unsigned value.
+      seedUsed: run.seedUsed | 0,
       ranked: run.ranked,
       inputLog: run.inputLog,
     },

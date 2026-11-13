@@ -68,6 +68,23 @@ verification/reset links print to the server console — fine for local dev only
 **Google login button missing?**
 Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`; it appears automatically.
 
+**What is the daily challenge?**
+Every game has a seeded daily run — the same challenge for everyone that day
+(the day rolls over at midnight IST). Unlimited tries, best score counts, and
+consecutive days build a streak. Offline runs use a local seed and are marked
+UNRANKED. Daily leaderboard rank never pays anything — it's pure bragging
+rights.
+
+**The game won't load / is slow.**
+Games load ONLY when you press PLAY (that's by design — the page stays light).
+If it's still slow: close heavy tabs, avoid low-power mode, try day mode, or
+add ?perf=1 to the URL to see the fps overlay. On mobile, use the fullscreen
+button in the top-right of the game.
+
+**Where did /play and /stack go?**
+They moved to /games/arena and /games/stack (plus /games/reflex, /games/dodge,
+/games/merge). Old links redirect automatically.
+
 ## Hosting & deployment
 
 **Where is the game hosted?**

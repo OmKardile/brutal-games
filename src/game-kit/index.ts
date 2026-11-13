@@ -37,6 +37,8 @@ export interface GameEvents {
   onPhase?: (phase: KitPhase) => void
   /** final stats of a finished run */
   onGameOver?: (summary: RunSummary) => void
+  /** raw engine-specific events (typed by the game package, passthrough) */
+  onGameEvent?: (ev: unknown) => void
 }
 
 /** Everything a game may touch. Nothing else exists to it. */
@@ -174,3 +176,4 @@ export {
 } from './juice'
 export { Pool } from './pool'
 export { PerfOverlay } from './perf'
+export { createInputRecorder, type InputRecorder } from './input-log'

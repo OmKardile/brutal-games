@@ -107,3 +107,69 @@ games remain fully playable and the board degrades to per-browser local mode
 when the API is absent. Persistent leaderboards require the paid disk. The
 workflow file cannot be committed with the current PAT (no `workflow` scope), so
 Pages deploys stay manual (runbook in README).
+
+## ADR-016 — Game package contract: engines are wrapped, never edited
+
+Date: 2026-11-13 · Status: accepted
+
+**Context.** Five engines live in `src/game/` with their own rAF loops,
+Math.random usage and event emitters. A reusable framework needs a uniform
+contract, but the engines are battle-tested and explicitly off-limits.
+
+**Decision.** `src/game-kit/` defines the contract (ctx + handle); each game
+package (`src/games/<slug>/`) provides a `shim.ts` that constructs the existing
+engine on `ctx.canvas` and adapts: daily seed injection (patched Math.random
+during a run), pause/resume via rAF gating, phase→adapter signal mapping.
+Runners (`page.tsx` in the package) keep the full per-game UX and mount engines
+ONLY through the shim. **Consequence:** engines stay frozen; portability comes
+from the shim layer; engine migration to the kit loop is a separate proposal.
+
+## ADR-017 — Daily seeds: server-authoritative, partial determinism, honest about it
+
+Date: 2026-11-13 · Status: accepted
+
+**Context.** Daily challenges need same-seed-for-everyone runs, but the
+engines use variable-dt rAF loops — bit-identical replays are impossible via
+a shim.
+
+**Decision.** Seed = FNV-1a(slug + dateKey + DAILY_SALT), server-side, day
+boundary configurable (default IST). The shim seeds Math.random during a run.
+Anti-cheat is layered instead of relying on replays: manifest plausibility
+ceilings (maxScorePerSecond, minRunSeconds), rate limits, seed-match checks
+(mismatch ⇒ UNRANKED), capped input logs stored for future verification —
+NOT verified in v1 and never claimed otherwise. **Consequence:** same seed ⇒
+same spawn sequences; leaderboard integrity rests on plausibility + review,
+same posture as the rewards run-completion checks.
+
+## ADR-018 — Ads and analytics behind one enforced adapter
+
+Date: 2026-11-13 · Status: accepted
+
+**Context.** Portals (Poki/CrazyGames) and future ad networks each have their
+own SDKs and strict rules; game code must never know about them.
+
+**Decision.** A single `PortalAdapter` interface is the ONLY door to the
+outside world. `createRuleEnforcedAdapter` wraps every implementation with the
+hard rules (gameplayStart only from stopped, never during ads; interstitials
+only at natural breaks, 90 s gap, first-minute block, 5 s timeout; pause+mute
+hooks; rewarded grants in-game perks only — never reward points). Poki and
+CrazyGames ship as stubs that refuse to guess SDK method names; they get
+finished only against the official docs at activation. **Consequence:** adding
+a portal or network is a config-level change; games and runners stay untouched.
+
+## ADR-019 — SEO content is hand-written per game, rankable text lives in HTML
+
+Date: 2026-11-13 · Status: accepted
+
+**Context.** Crawlers cannot see inside a canvas; portal SEO needs unique,
+substantive server-rendered content.
+
+**Decision.** Every `/games/[slug]` page ships unique 150-300 word copy,
+how-to-play, tips, FAQ (plain text — FAQ rich results are dead), related
+games and last-updated, all in the HTML. JSON-LD co-types VideoGame +
+WebApplication (VideoGame alone is ignored for software rich results);
+aggregateRating never emitted (no real ratings exist — faking it risks manual
+action). Games lazy-load on Play click so the SEO page stays fast (CWV: the
+game container reserves its aspect ratio). OG images generated locally
+(`bun run og:gen`). **Consequence:** adding a game requires authoring real
+copy — autogen/thin pages are banned by policy.

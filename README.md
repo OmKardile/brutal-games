@@ -103,6 +103,7 @@ Settings → Source to *GitHub Actions*.)
 | `db:backup` | `VACUUM INTO` hot backup to `db/backups/` |
 | `seed:admin` | Create/promote the admin account (never auto-promoted) |
 | `lint` | ESLint |
+| `og:gen` | Regenerate 1200×630 OG/Twitter images into `public/og/` |
 
 ## Project layout
 
@@ -135,6 +136,7 @@ QA.md               pre-ship checklist (run before any game ships)
 - [decisions.md](decisions.md) — architecture decision records
 - [help.md](help.md) — player & admin FAQ
 - [CHANGELOG.md](CHANGELOG.md) — versioned history
+- [QA.md](QA.md) — pre-ship checklist (run before any game ships)
 - [compact.md](compact.md) — state summary for future sessions
 
 A fan tribute, not affiliated with ahwoo. Rewards payouts involve real money and require

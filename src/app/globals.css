@@ -387,3 +387,9 @@ html {
 .brutal-chip {
   animation: brutal-chip 5s ease-in-out infinite;
 }
+
+/* game stage loading bar */
+@keyframes loadingbar {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(360%); }
+}
