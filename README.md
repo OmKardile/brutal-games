@@ -1,20 +1,29 @@
 # BRUTAL//GAMES
 
-Two free browser games in one brutal arcade — a fan-made tribute to
+Five free browser games in one brutal arcade — a fan-made tribute to
 [BRUTAL](https://github.com/ahwootech/BRUTAL), the open-source C# game framework by ahwoo.
 
-- **BRUTAL//ARENA** (`/play`) — top-down wave shooter. Canvas engine, WebAudio synth SFX,
-  upgrade drafting, killstreaks, Overdrive, bosses.
-- **BRUTAL//STACK** (`/stack`) — one-tap isometric tower stacker. Drop the block, slice the
-  overhang, chain PERFECT drops (rising pentatonic chimes) to regrow the tower. Instant retry.
+- **BRUTAL//ARENA** (`/games/arena`) — top-down twin-stick wave shooter. Canvas engine,
+  WebAudio synth SFX, upgrade drafting, killstreaks, Overdrive, bosses.
+- **BRUTAL//STACK** (`/games/stack`) — one-tap isometric tower stacker. Drop the block, slice
+  the overhang, chain PERFECT drops (rising pentatonic chimes) to regrow the tower. Instant retry.
+- **BRUTAL//REFLEX** (`/games/reflex`) — timing strike. Stop the sweeping blade inside the
+  shrinking zone; chain perfects up the chime ladder.
+- **BRUTAL//DODGE** (`/games/dodge`) — one-button gauntlet. Hold to climb, release to fall,
+  thread the gates, graze for CLOSE bonuses.
+- **BRUTAL//MERGE** (`/games/merge`) — drop-merge pit. Fuse circles up an 11-tier chain,
+  ride the combo window, detonate the SINGULARITY.
 
-Keyboard + mouse, touch (virtual sticks) and gamepad (twin-stick + rumble) all work in
-both games — plug in a pad and press any button to link it.
+Every game runs in night and day mode (live-switchable, canvases included), on keyboard,
+mouse, touch and gamepad (twin-stick + rumble) — plug in a pad and press any button to link it.
+Daily challenges (`/daily`): same seed for everyone that day, per-game daily leaderboard,
+streaks, Wordle-style share.
 
 Plus an optional rewards program: players earn points for genuine play and receive a
 proportional share of a monthly revenue pool. Rewards: `/rewards` (needs an account).
 
-Both games submit runs to a shared per-game leaderboard (`/api/scores?game=arena|stack`).
+Every game submits runs to a shared per-game leaderboard (`/api/scores?game=arena|stack|reflex|dodge|merge`)
+plus a per-day daily leaderboard (`/api/daily/board?game=…&dateKey=…`).
 
 ## Stack
 
@@ -98,17 +107,25 @@ Settings → Source to *GitHub Actions*.)
 ## Project layout
 
 ```
-src/app/            pages (landing, play, stack, auth, rewards, terms, privacy, admin)
-src/app/api/        route handlers (health, auth/, rewards/, admin/, scores/)
-src/game/           canvas game engines: engine.ts (arena) + stack.ts (tower stacker)
+src/app/            pages (landing, games hub + per-game + category + daily, auth, rewards,
+                    terms, privacy, about/contact/help, admin)
+src/app/api/        route handlers (health, auth/, rewards/, admin/, scores/, daily/)
+src/game/           canvas game engines (arena, stack, reflex, dodge, merge) — DO NOT edit;
+                    new games build on the kit instead
+src/game-kit/       reusable game framework: loop, input, canvas scaler, audio host, rng,
+                    storage, juice, pooling, perf overlay + adapter/ (PortalAdapter +
+                    enforced ad/gameplay rules; Noop, OwnPortal, Poki/CrazyGames stubs)
+src/games/          game packages: manifest + SEO content + engine shim per slug + registry
 src/lib/            env, db, auth (session/password/email/google), captcha, rate-limit, assets,
-                    scores-client (online board + static-site local-board fallback)
+                    scores-client (online board + static-site local-board fallback),
+                    daily/ (seed, board, streaks)
 src/lib/rewards/    rewards domain: ledger, payout math, heartbeat, fraud, config, IST utils
-src/components/     shadcn/ui + Turnstile widget + RewardsHud (play-page heartbeat client)
+src/components/     shadcn/ui + Turnstile + RewardsHud + portal (GameStage, ConsentBanner…)
 prisma/schema.prisma data model
 Dockerfile + render.yaml   one-click Render deploy (bun, standalone, SQLite)
-tests/              bun test suites (+ legacy shell scripts)
-scripts/            seed-admin, backup-db, docker-start, verify-schema
+tests/              bun test suites (rewards, game-kit, daily)
+scripts/            seed-admin, backup-db, docker-start, verify-schema, gen-og-images
+QA.md               pre-ship checklist (run before any game ships)
 ```
 
 ## Documentation

@@ -3,6 +3,89 @@
 All notable changes to BRUTAL//GAMES. Dates are UTC. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions are ours, not semver-strict.
 
+## [0.7.0] — 2026-11-13
+
+### Added — reusable game framework + portal + daily challenges
+- New **game-kit** (`src/game-kit/`): fixed-timestep loop (clamped dt), unified input
+  (keyboard/mouse/touch with touch-action none + no scroll/zoom/long-press), 16:9
+  canvas scaler (DPR ≤ 2, safe-area insets), audio host (unlock on first touch, global
+  mute persisted, auto-mute on blur) composing the existing WebAudio `Sfx`, safe
+  storage wrapper (try/catch + in-memory fallback), seeded PRNG (mulberry32 + string
+  hash, separate logic/cosmetic streams), juice utils (screen shake, particles,
+  tweens, hit-stop; prefers-reduced-motion), object pooling, dev-only perf overlay.
+- **PortalAdapter** layer (`src/game-kit/adapter/`): single point for all
+  ad/portal/reward calls — `NoopAdapter` (default), `OwnPortalAdapter` (analytics
+  sink + rewards hooks), Poki/CrazyGames typed stubs (method names to be verified
+  against the official SDK docs at activation). The enforced rules live in
+  `rules.ts`: gameplayStart only on first input, gameplayStop on every interruption,
+  never back-to-back and never during an ad, interstitials only at natural breaks
+  with a configurable min gap (default 90s) and none in the first session minute,
+  5s ad timeout then continue, pause + mute around every ad, rewarded ads grant
+  in-game perks only — never reward points.
+- **Daily-seed system** (server-authoritative): `GET /api/daily/seed?game=` returns
+  `{ dateKey, seed }` (seed = hash(slug + dateKey + DAILY_SALT), day boundary
+  configurable, default Asia/Kolkata midnight). `POST /api/daily/run` (zod-validated,
+  rate-limited, plausibility-checked against each game manifest's
+  maxScorePerSecond/minRunSeconds) appends to a per-game-per-day leaderboard, stores
+  a size-capped compressed input log (unverified in v1 — documented), and maintains
+  streaks (server-side for signed-in players, localStorage for guests, merged on
+  login). Offline fallback seeds are allowed but marked UNRANKED. Same seed for
+  everyone that day; unlimited tries, best score counts. Wordle-style share with
+  copy-link fallback and deep links `/games/<slug>?daily=<dateKey>`. No cash rewards
+  for leaderboard rank (engagement-based rewards only — unchanged).
+- **Game package contract** (`src/games/<slug>/`): manifest (slug, title, genre,
+  controls, maxScorePerSecond, minRunSeconds, dailyEnabled) + `createGame(ctx)` host.
+  All five existing engines are wrapped via shims — `src/game/*` is untouched.
+- **Portal pages**: `/games` (hub), `/games/[slug]` (SSR SEO page + poster → lazy
+  game load on Play click), `/games/category/[genre]`, `/daily`, `/about`,
+  `/contact`, `/help`, custom 404. Legacy routes (`/play`, `/stack`, `/reflex`,
+  `/dodge`, `/merge`) 301 to their new homes (client-redirect stubs keep the static
+  export working).
+- **SEO layer**: per-game server-rendered copy (unique 150–300 word description,
+  how-to-play, tips, FAQ, related games, last updated), per-page titles/descriptions/
+  canonicals, JSON-LD (`VideoGame`+`WebApplication` co-typed, `BreadcrumbList`,
+  `ItemList` on category pages, `WebSite`+`Organization` on home), dynamic
+  `sitemap.xml` with lastmod, `robots.txt` via `app/robots.ts` (blocks `/api`,
+  `/admin`, `/rewards`), generated 1200×630 OG/Twitter images per game.
+- **Branding**: "Designed & developed by Omkar Kardile" (omkardile.is-a.dev) in the
+  site footer, About/Help pages, head author metadata and package.json — never
+  inside game code.
+- `QA.md` pre-ship checklist; `bun test` suites for the kit (rng determinism, loop
+  clamping, adapter rule state machine, storage fallback, pooling) and the daily
+  system (seed determinism, tz rollover, plausibility, streaks).
+
+### Changed
+- `RewardsHud` is now hosted by the shared `GameStage` on every game page (was:
+  `/play` only) — identical passive heartbeat behavior.
+- Landing/footer links point at `/games/*`; consent banner placeholder ships
+  disabled (`NEXT_PUBLIC_CONSENT_BANNER`, legal review pending).
+
+## [0.6.0] — 2026-11-13
+
+### Added — three new games, night/day themes, landing remake
+- New games: **BRUTAL//REFLEX** (`/reflex`, timing-strike — sweeping blade +
+  shrinking zone, perfect-streak chime ladder, zone regrow comeback, slow-mo death,
+  attract-mode menu), **BRUTAL//DODGE** (`/dodge`, one-button gauntlet —
+  hold-to-climb physics, gates + drifting blocks, near-miss CLOSE bonuses, baited
+  orbs, 500m milestones, shatter + slow-mo death), **BRUTAL//MERGE** (`/merge`,
+  drop-fuse pit — circle physics with 2 substeps, 11-tier fusion chain, combo ×6
+  window, danger-line 3s countdown, tier-11 SINGULARITY detonation). Game-feel per
+  the gamedev skill notes: trauma shake, hit-stop, importance-tier feedback.
+- **Night/day themes for the whole site AND every game canvas**: ThemeProvider
+  (night default / bone day) with localStorage + pre-paint init script; CSS variable
+  tokens in globals.css; shared `src/game/theme.ts` palettes — all five engines
+  render both modes with live mid-run switching; per-game accent identities
+  (red/amber/cyan/violet/lime) tuned per mode; ThemeToggle in the nav and every
+  game HUD/menu.
+- **Awwwards-style landing remake**: mega display type (Anton) with RGB-split
+  layers + mouse parallax, animated color-field blobs, dual marquee ribbons, bento
+  game grid with per-game SVG art, scroll reveals, count-up stats band, tabbed
+  leaderboard for all 5 games, bestiary, briefing, pilot card, mega footer.
+
+### Changed
+- `GameId` + `/api/scores` extended to five games; demo board re-seeded
+  (scores were wiped by an earlier `db push`); layout metadata + Anton font.
+
 ## [0.5.0] — 2026-11-13
 
 ### Added — controller support (both games)
