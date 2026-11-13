@@ -23,7 +23,7 @@ input events and drives the heartbeat API. No engine API changes.
 
 | Model | Role |
 |---|---|
-| `User` | identity: argon2id hash (legacy scrypt verifiable), role PLAYER/ADMIN, status ACTIVE/FROZEN, `emailVerified`, `adultDeclaredAt` (18+), `upiId` + `upiKey` (unique normalized UPI), `nameKey` (case-insensitive unique callsign key) |
+| `User` | identity: argon2id hash (legacy scrypt verifiable), role PLAYER/ADMIN, status ACTIVE/FROZEN, `emailVerified`, `adultDeclaredAt` (18+), `upiId` + `upiKey` (unique normalized UPI), `nameKey` (unique callsign), `totpSecret`/`totpEnabledAt` (admin 2FA, AES-256-GCM at rest) |
 | `Session` | cookie token (random) → sha256 hash, 30-day sliding expiry |
 | `EmailToken` | one-time verify (72h) / reset (1h) tokens, hashed |
 | `RateLimitBucket` | persistent rate-limit + lockout state: sliding-window hit array (JSON), consecutive-failure counter, `lockedUntil` (login backoff). Survives restarts |
@@ -33,11 +33,12 @@ input events and drives the heartbeat API. No engine API changes.
 | `HighScore` | global board entry; `userId`/`ranked` (0.8) + `pending` verification + soft-removal audit columns (0.9.1) |
 | `MonthlyPool` | month (IST), net revenue (paise), share %, status DRAFT→LOCKED, `leftoverMinor`, `voidedMinor` |
 | `PoolDistribution` | immutable per-user snapshot at lock: points, raw share, capped share |
-| `PayoutRequest` | PENDING→APPROVED→PAID/REJECTED, `holdUntil` snapshot, transaction ref |
+| `PayoutRequest` | PENDING→APPROVED→PAID/REJECTED, `holdUntil` snapshot, `idempotencyKey` (unique — replays no-op), `approvedBy` (two-person rule), transaction ref |
 | `FraudFlag` | flag-only signals → manual review queue |
 | `DeviceFingerprint` | hashed device signals + last IP, per user |
 | `RewardSetting` | key→JSON overrides of code defaults (admin editable) |
 | `DailyRun` / `DailyStreak` / `PortalSetting` | daily challenges: per-day runs (seed-checked, size-capped input log, pending/removal moderation since 0.9.1), streaks, portal config |
+| `AdminAudit` | append-only admin trail: who/what/when/target/before/after + IP (0.9.2) |
 
 Money is int paise everywhere. Reward days/months are Asia/Kolkata (IST) —
 `src/lib/rewards/ist.ts` converts to UTC ranges for queries.
@@ -75,8 +76,11 @@ Rewards (session required): `POST /api/rewards/{consent,upi,payout}`,
 `GET /api/rewards/{summary,events,payout}`,
 `POST /api/rewards/{session/start (legacy compat → same lib as /api/run/start),heartbeat,run-end}`.
 Daily: `GET /api/daily/{seed,board,summary}`, `POST /api/daily/run`.
-Admin (ADMIN role): `GET|POST /api/admin/{pool,payouts,flags,settings}`,
-`GET /api/admin/pool/preview`, `GET|POST /api/admin/users[/id]`.
+Admin (ADMIN role + TOTP 2FA + 1h admin-session cookie):
+`GET|POST /api/admin/{pool,payouts,flags,settings,boards}`,
+`GET /api/admin/{audit,reconciliation}` (+ `?month=`),
+`GET /api/admin/pool/preview`, `GET|POST /api/admin/users[/id]`,
+`POST /api/admin/totp/{setup,enable}` (open during forced enrollment).
 
 All bodies are zod-validated. All state-changing routes check the CSRF
 baseline (Origin/Host + JSON content-type, `src/lib/http.ts`). Rate limits are
@@ -139,7 +143,7 @@ behind a reverse proxy; headers ignored otherwise).
 
 ## Testing
 
-`bun test tests/` — 180 tests. `payout-math.test.ts` (pure edge cases: zero revenue,
+`bun test tests/` — 199 tests. `payout-math.test.ts` (pure edge cases: zero revenue,
 zero points, caps, rounding residue, thresholds), `ledger.test.ts` (real temp SQLite DB:
 idempotency, daily-cap clamps, streaks, reversal semantics, month clamping, gates),
 `rewards-logic.test.ts` (heartbeat timing, run plausibility, IST boundaries, IP/CIDR
@@ -148,7 +152,7 @@ matching, fingerprint stability, challenge determinism), `auth-hardening.test.ts
 backoff math), `rate-limit.test.ts` (persistent sliding window, restart persistence,
 lockout state machine), `scores-service.test.ts` (ranked-with-token, replay burn,
 foreign/mismatched/aborted tokens, implausible scores, callsign claims,
-ranked-only boards), `anti-cheat.test.ts` (token signing/rotation/tamper, heartbeat challenge chain + replay/forgery, entropy/drift, daily seed claims, statistical classification), `risk-boards.test.ts` (risk bands, pending/moderation flows, cooling, payout gating, UPI constraint, HMAC privacy).
+ranked-only boards), `anti-cheat.test.ts` (token signing/rotation/tamper, heartbeat challenge chain + replay/forgery, entropy/drift, daily seed claims, statistical classification), `risk-boards.test.ts` (risk bands, pending/moderation flows, cooling, payout gating, UPI constraint, HMAC privacy), `payout-integrity.test.ts` (RFC 6238 vectors, admin-token crypto, concurrent double-spend, idempotency, self-approval, two-person, kill switch, reconciliation, audit).
 
 ## Operations
 
