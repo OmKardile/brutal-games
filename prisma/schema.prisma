@@ -263,3 +263,51 @@ model RewardSetting {
   value     String // JSON-encoded value
   updatedAt DateTime @updatedAt
 }
+
+// ------------------------------------------------------------------ daily challenges
+// (see technical-documentation.md — server-authoritative seeds, append-only runs)
+
+// One row per completed daily run (unlimited tries; the board computes the
+// best score per player). Append-only like HighScore. `ranked=false` marks
+// offline/unverified-seed runs — they appear on the board but flagged.
+model DailyRun {
+  id         String   @id @default(cuid())
+  game       String // slug: arena | stack | reflex | dodge | merge
+  dateKey    String // 'YYYY-MM-DD' in the configured day-boundary timezone
+  userId     String? // signed-in player, null for guests
+  name       String // display callsign (max 16)
+  score      Int
+  durationMs Int
+  seedUsed   Int // seed the client reports it played with (audit trail)
+  ranked     Boolean  @default(true)
+  inputLog   String? // size-capped compressed input log — stored, NOT verified in v1
+  createdAt  DateTime @default(now())
+
+  @@index([game, dateKey, score])
+  @@index([userId, dateKey])
+}
+
+// Consecutive-day streak of "at least one completed daily run" (any game).
+// Server-side for signed-in players; guests track it in localStorage and it
+// merges on login (see src/lib/daily/streaks.ts for the merge approximation).
+model DailyStreak {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  current     Int      @default(0)
+  longest     Int      @default(0)
+  lastDateKey String // last day that counted toward the streak
+  updatedAt   DateTime @updatedAt
+}
+
+// Portal-level key/value config (overrides code defaults; admin-editable).
+// Keys (see src/lib/daily/config.ts):
+//   DAILY_TZ                       default 'Asia/Kolkata'
+//   INTERSTITIAL_MIN_GAP_MS        default 90000
+//   INTERSTITIAL_FIRST_MINUTE_MS   default 60000
+//   AD_TIMEOUT_MS                  default 5000
+//   DAILY_INPUT_LOG_MAX_CHARS      default 16384
+model PortalSetting {
+  key       String   @id
+  value     String // JSON-encoded value
+  updatedAt DateTime @updatedAt
+}
