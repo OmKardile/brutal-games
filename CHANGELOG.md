@@ -3,6 +3,51 @@
 All notable changes to BRUTAL//GAMES. Dates are UTC. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions are ours, not semver-strict.
 
+## [0.10.0] — 2026-11-13
+
+### Security — hardening program phase 6 (headers, infra, monitoring, runbook)
+
+Closes H2, C2, M7 (alerts/runbook) and L1/L4. `REWARDS_ENABLED` stays false.
+Rationale: ADR-027.
+
+**Security headers** (headers-only middleware — authorization still never
+leaves route handlers)
+- CSP (no third-party script hosts — Turnstile's origin only; object-src
+  none; locked base-uri/form-action/frame-ancestors; tight connect-src with
+  optional analytics origin), HSTS 180d, nosniff, Referrer-Policy,
+  Permissions-Policy, X-Frame-Options SAMEORIGIN, COOP/CORP.
+- Documented CSP trade-off: the portal is fully prerendered, so per-request
+  nonces cannot be injected into static HTML — script-src carries
+  'unsafe-inline' for Next's hydration bootstrap; everything else stays
+  strict. Browser-verified: zero console errors or CSP violations on the
+  landing and game pages.
+
+**Infrastructure (C2 + L4)**
+- New hardened production Caddy template (`deploy/Caddyfile`): auto-HTTPS,
+  mirrored security headers, 1MB body cap, proxy timeouts, dotfiles/db/
+  backups blocked, Server header hidden, app on localhost. The dev Caddyfile
+  loses the `?XTransformPort=` open local-proxy handler for good.
+- Dockerfile: non-root runtime (`USER bun`), app binds loopback only.
+
+**Monitoring + incident response (M7)**
+- Structured security-log stream (JSON events on stdout: auth.*, flag.*,
+  payout.*, payout.kill_switch, admin.login_new_ip, reconciliation.mismatch
+  — no secrets/PII) + `ALERT_WEBHOOK_URL` alerts (kill-switch flips,
+  reconciliation mismatches, HIGH flags, admin logins from new IPs), wired
+  into login/signup/reset, flag raising, freeze, payout lifecycle, settings
+  flips and the reconciliation report.
+- **docs/incident-runbook.md**: triage, payout freeze, session revocation,
+  the full secret-rotation order (SESSION_SECRET → run-token keys → daily
+  salt → fingerprint salt), fraud-response procedure, pool void/re-run, DB-
+  leak response, user-communication template, post-mortem template, host
+  checklist, alert catalog.
+
+**Hygiene**: dead `GET /api` route removed (L1).
+
+### Changed
+- docs: ADR-027, threat-model status (H2/C2/M7/L1/L4 closed), README,
+  technical docs, compact, .env.example (ALERT_WEBHOOK_URL), help link.
+
 ## [0.9.2] — 2026-11-13
 
 ### Security — hardening program phase 5 (payout integrity + admin hardening + kill switch + reconciliation)

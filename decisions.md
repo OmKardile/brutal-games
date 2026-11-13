@@ -406,3 +406,49 @@ The stateless admin token dies within 1h even if a session leaks; freeze/
 password-change still revoke the underlying session. Two-person payouts are
 structurally impossible with a single admin — the threshold ships disabled
 and documented.
+
+## ADR-027 — Security headers, hardened Caddy, monitoring + runbook (phase 6)
+
+Date: 2026-11-13 · Status: accepted (phase 6)
+
+**Context.** H2 (zero security headers), C2 (dev Caddyfile's open local
+proxy), M7 (no security log/alerts/runbook) and the L4 host checklist were
+the remaining infrastructure findings.
+
+**Decision.**
+1. **Headers** (src/middleware.ts — headers ONLY, never authorization):
+   CSP, HSTS (180d), nosniff, Referrer-Policy, Permissions-Policy,
+   X-Frame-Options, COOP/CORP. CSP trade-off: the portal is fully
+   PRERENDERED and Next.js cannot inject per-request nonces into static
+   HTML — a nonce/'strict-dynamic' policy would break every page. We ship
+   the strictest CSP that works for a prerendered app: no third-party script
+   hosts (Turnstile's challenge origin only), object-src 'none', locked
+   base/form/frame-ancestors, tight connect-src; script-src needs
+   'unsafe-inline' for Next's hydration bootstrap (documented widening —
+   XSS blast radius is still capped by the rest + React escaping).
+   Browser-verified: zero console errors / CSP violations on landing + game
+   pages. Static-export deploys can't set headers — documented (Pages
+   has no API surface to protect).
+2. **Caddy**: new hardened production template (deploy/Caddyfile) — auto-
+   HTTPS, security headers (mirrored), 1MB body cap, proxy timeouts,
+   dotfiles/db/backup paths 404, Server header removed, app on localhost.
+   The dev Caddyfile no longer carries the ?XTransformPort open-proxy
+   handler (C2 closed).
+3. **Container**: Dockerfile runs as non-root (`USER bun`), app binds
+   loopback (HOSTNAME=127.0.0.1) — the edge proxy is the only path in.
+4. **Monitoring**: structured security-log (JSON events: auth.*, flag.*,
+   payout.*, kill_switch, reconciliation.mismatch — no secrets/PII) +
+   ALERT_WEBHOOK_URL alerts (kill switches, reconciliation mismatches,
+   HIGH flags, admin login from new IP). Admin actions remain durably in
+   AdminAudit; alerts fire-and-forget.
+5. **docs/incident-runbook.md**: triage, freeze payouts, revoke sessions,
+   secret rotation order (incl. run-token key rotation), fraud response,
+   pool void/re-run, leak response, user-comms template, post-mortem
+   template, host checklist, alert catalog.
+6. Dead `GET /api` route removed (L1).
+
+**Consequences.** The middleware exists but carries ZERO authorization logic
+(the standing rule holds — verified: no auth checks in it). CSP is enforced
+on the dynamic deploy; GitHub-Pages static export inherits no headers
+(nothing to protect there — no API). Alert delivery depends on setting
+ALERT_WEBHOOK_URL (runbook §9).

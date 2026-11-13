@@ -7,6 +7,7 @@ import { getSettings } from '@/lib/rewards/config'
 import { logAdminAction } from '@/lib/audit'
 import { csrfBlocked } from '@/lib/http'
 import { clientIp } from '@/lib/env'
+import { securityLog } from '@/lib/security-log'
 
 export const dynamic = 'force-dynamic'
 
@@ -71,6 +72,7 @@ export async function POST(req: NextRequest) {
       after: { status: result.request.status, approvedBy: result.request.approvedBy },
       ip,
     })
+    securityLog('payout.approved', { payoutId: input.id, adminId: admin.id, awaitingSecond: Boolean(result.awaitingSecond) })
     return NextResponse.json({
       request: result.request,
       ...(result.awaitingSecond ? { awaitingSecondAdmin: true } : {}),
@@ -80,6 +82,7 @@ export async function POST(req: NextRequest) {
   if (input.action === 'reject') {
     const result = await rejectPayout(admin.id, input.id, input.reason)
     if (!result.ok) return NextResponse.json({ error: result.message, code: result.code }, { status: 409 })
+    securityLog('payout.rejected', { payoutId: input.id, adminId: admin.id })
     await logAdminAction({
       adminId: admin.id,
       action: 'PAYOUT_REJECT',

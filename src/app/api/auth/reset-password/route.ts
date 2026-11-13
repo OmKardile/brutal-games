@@ -6,6 +6,7 @@ import { sha256, destroyAllUserSessions } from '@/lib/auth/session'
 import { clientIp } from '@/lib/env'
 import { limit, tooMany } from '@/lib/rate-limit'
 import { csrfBlocked } from '@/lib/http'
+import { securityLog } from '@/lib/security-log'
 
 export const dynamic = 'force-dynamic'
 
@@ -52,5 +53,6 @@ export async function POST(req: NextRequest) {
     }),
   ])
   await destroyAllUserSessions(row.userId) // security: kill all sessions
+  securityLog('auth.password_reset', { userId: row.userId })
   return NextResponse.json({ ok: true })
 }

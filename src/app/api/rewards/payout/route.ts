@@ -6,6 +6,7 @@ import { getSettings } from '@/lib/rewards/config'
 import { createPayoutRequest, rewardBalance } from '@/lib/rewards/payouts'
 import { verifyTurnstile } from '@/lib/captcha'
 import { csrfBlocked } from '@/lib/http'
+import { securityLog } from '@/lib/security-log'
 import { limit, tooMany } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
@@ -62,6 +63,7 @@ export async function POST(req: NextRequest) {
     amountMinor: parsed.data.amountMinor,
     idempotencyKey: parsed.data.idempotencyKey,
   })
+  if (result.ok) securityLog('payout.requested', { userId: user.id, amountMinor: parsed.data.amountMinor })
   if (!result.ok) {
     return NextResponse.json({ error: result.message, code: result.code }, { status: 400 })
   }

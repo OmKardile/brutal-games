@@ -4,6 +4,8 @@ import { requireAdmin } from '@/lib/auth/guard'
 import { csrfBlocked } from '@/lib/http'
 import { logAdminAction } from '@/lib/audit'
 import { clientIp } from '@/lib/env'
+import { securityLog } from '@/lib/security-log'
+import { alert } from '@/lib/alerts'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,6 +43,14 @@ export async function POST(req: NextRequest) {
       after: changed,
       ip: clientIp(req),
     })
+    if ('REWARDS_PAYOUTS_PAUSED' in changed || 'REWARDS_ENABLED' in changed) {
+      securityLog('payout.kill_switch', { adminId: admin.id, changed: Object.keys(changed) })
+      void alert(
+        'Kill switch flipped',
+        { adminId: admin.id, changed: Object.keys(changed), values: changed },
+        'critical',
+      )
+    }
   }
   return NextResponse.json({ settings })
 }

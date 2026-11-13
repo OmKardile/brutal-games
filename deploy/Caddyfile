@@ -1,0 +1,53 @@
+# BRUTAL//GAMES — PRODUCTION Caddy template (phase 6).
+#
+# Unlike the dev Caddyfile in the repo root (sandbox-only: it carries the
+# ?XTransformPort= local-proxy handler that must NEVER reach production),
+# this template is hardened:
+#   - auto-HTTPS by default (put your domain in SITE_ADDRESS)
+#   - response security headers (defense in depth with the app middleware)
+#   - request body cap 1MB (all our APIs are small JSON)
+#   - proxy timeouts
+#   - dotfiles / db files / backups never served
+#   - Server header removed
+#   - app expected on localhost:3000 (bind the app to localhost only)
+#
+# Usage: SITE_ADDRESS=play.example.com caddy run --config deploy/Caddyfile
+# Env: SITE_ADDRESS (required, e.g. "example.com" or ":443"),
+#      APP_ORIGIN  (default http://localhost:3000)
+
+{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	# ---- headers (mirror of src/middleware.ts; CSP is set by the app with
+	# per-request nonces — do NOT add a static CSP here, it would break it)
+	header {
+		Strict-Transport-Security "max-age=15552000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+		X-Frame-Options "SAMEORIGIN"
+		Cross-Origin-Opener-Policy "same-origin"
+		-Server
+	}
+
+	# never serve dotfiles, the database or backups through the edge
+	@forbidden {
+		path /.* /*.db /*.db-* /db/* /backups/* /backup/* /*.sql /*.env*
+	}
+	respond @forbidden 404
+
+	# all our endpoints are small JSON bodies
+	request_body {
+		max_size 1MB
+	}
+
+	reverse_proxy {$APP_ORIGIN:http://localhost:3000} {
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+		transport http {
+			read_timeout 60s
+			write_timeout 60s
+			response_header_timeout 30s
+		}
+	}
+}

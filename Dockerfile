@@ -18,10 +18,15 @@ RUN bun install --frozen-lockfile
 COPY . .
 RUN bun run db:generate && bun run build
 
+# 3) non-root runtime (phase 6 hardening): the bun image ships a `bun` user.
+#    /data is the persistent volume mount — make it writable by the app user.
 ENV NODE_ENV=production
-ENV HOSTNAME=0.0.0.0
+ENV HOSTNAME=127.0.0.1
 # Render sets PORT (10000 by default) — the standalone server honours it.
+# HOSTNAME is loopback: the app must only be reached through the edge proxy.
 EXPOSE 10000
+RUN mkdir -p /data && chown -R bun:bun /data /app
+USER bun
 
-# 3) boot: sync SQLite schema, optional admin seed, serve
+# 4) boot: sync SQLite schema, optional admin seed, serve
 CMD ["sh", "scripts/docker-start.sh"]

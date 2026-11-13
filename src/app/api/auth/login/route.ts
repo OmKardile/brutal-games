@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { db } from '@/lib/db'
+import { sha256 } from '@/lib/auth/session'
 import { clientIp } from '@/lib/env'
 import {
   verifyPassword,
@@ -23,6 +24,8 @@ import { registerDevice } from '@/lib/rewards/fraud'
 import { getSettings } from '@/lib/rewards/config'
 import { verifyTurnstile, turnstileEnabled } from '@/lib/captcha'
 import { csrfBlocked } from '@/lib/http'
+import { securityLog } from '@/lib/security-log'
+import { alert } from '@/lib/alerts'
 
 export const dynamic = 'force-dynamic'
 
@@ -65,6 +68,7 @@ export async function POST(req: NextRequest) {
     turnstileEnabled() && Math.max(acctLock.failCount, ipLock.failCount) >= CAPTCHA_AFTER_FAILS
   const lock = acctLock.locked ? acctLock : ipLock
   if (lock.locked) {
+    securityLog('auth.login_locked', { emailHash: sha256(email).slice(0, 12) })
     return NextResponse.json(
       {
         error: 'Too many failed attempts. Try again later.',
@@ -91,6 +95,7 @@ export async function POST(req: NextRequest) {
     await dummyVerify()
   }
   if (!user || !ok) {
+    securityLog('auth.login_failed', { emailHash: sha256(email).slice(0, 12) })
     await Promise.all([recordFailure(acctKey, LOGIN_LOCKOUT), recordFailure(ipKey, LOGIN_LOCKOUT)])
     const fails = Math.max(acctLock.failCount + 1, ipLock.failCount + 1)
     return NextResponse.json(
@@ -114,6 +119,18 @@ export async function POST(req: NextRequest) {
 
   await Promise.all([clearFailures(acctKey), clearFailures(ipKey)])
   await db.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } })
+  securityLog('auth.login_success', { userId: user.id, role: user.role })
+  // admin login from a new network -> alert (threat T9)
+  if (user.role === 'ADMIN') {
+    const known = await db.session.findFirst({
+      where: { userId: user.id, ip, createdAt: { lt: new Date(Date.now() - 60_000) } },
+      select: { id: true },
+    })
+    const firstEver = (await db.session.count({ where: { userId: user.id } })) <= 1
+    if (!known && !firstEver) {
+      void alert('Admin login from a new IP', { adminId: user.id }, 'critical')
+    }
+  }
 
   // ADMIN accounts: password alone is never enough once 2FA is live.
   // Without an enabled secret we still log in — but requireAdmin forces

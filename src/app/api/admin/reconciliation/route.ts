@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth/guard'
 import { monthlyReconciliation } from '@/lib/rewards/reconciliation'
+import { securityLog } from '@/lib/security-log'
+import { alert } from '@/lib/alerts'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,5 +21,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Month must be YYYY-MM.' }, { status: 400 })
   }
   const report = await monthlyReconciliation(month)
+  if (!report.ok) {
+    securityLog('reconciliation.mismatch', { month, issues: report.issues })
+    void alert('Reconciliation mismatch', { month, issues: report.issues }, 'critical')
+  }
   return NextResponse.json(report)
 }

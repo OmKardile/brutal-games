@@ -12,6 +12,8 @@ import { db as defaultDb } from '@/lib/db'
 import type { PrismaClient } from '@prisma/client'
 import type { RewardSettings } from '@/lib/rewards/config'
 import type { DB } from '@/lib/rewards/points'
+import { securityLog } from '@/lib/security-log'
+import { alert } from '@/lib/alerts'
 
 export type FlagType =
   | 'DUPLICATE_DEVICE'
@@ -111,6 +113,10 @@ export async function flagUser(
       details: JSON.stringify(details).slice(0, 4000),
     },
   })
+  securityLog('flag.raised', { userId, flagType: type, severity })
+  if (severity === 'HIGH') {
+    void alert(`HIGH-severity flag raised: ${type}`, { userId, flagType: type }, 'warn')
+  }
 }
 
 /** Purge device/signal rows older than the retention window (M1 fix). */

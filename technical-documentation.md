@@ -136,6 +136,14 @@ behind a reverse proxy; headers ignored otherwise).
   classified (own history + population, flag-only); heartbeats carry a
   rotating challenge echo (replays → 409) plus frame-drift/input-entropy
   signals; sessions older than 6h cannot be scored.
+- Headers (0.10.0): headers-only middleware (src/middleware.ts) sets strict
+  CSP (no third-party script hosts; Turnstile origin only; prerendered pages
+  cannot carry nonces — documented ADR-027), HSTS, nosniff, Referrer-Policy,
+  Permissions-Policy, X-Frame-Options, COOP/CORP. Authorization NEVER lives
+  in the middleware. Hardened Caddy template at deploy/Caddyfile; Dockerfile
+  runs non-root on loopback. Security events stream as JSON logs
+  (src/lib/security-log.ts) + ALERT_WEBHOOK_URL alerts; incident procedures
+  in docs/incident-runbook.md.
 - Known limits: statistical and activity signals are FLAG-ONLY (humans decide;
   Layer D replay verification is deferred until the engines are deterministic);
   VPN/datacenter detection is a static admin-editable list (no GeoIP service);

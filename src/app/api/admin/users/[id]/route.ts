@@ -7,6 +7,7 @@ import { rewardBalance } from '@/lib/rewards/payouts'
 import { destroyAllUserSessions } from '@/lib/auth/session'
 import { logAdminAction } from '@/lib/audit'
 import { clientIp } from '@/lib/env'
+import { securityLog } from '@/lib/security-log'
 import { csrfBlocked } from '@/lib/http'
 
 export const dynamic = 'force-dynamic'
@@ -92,6 +93,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     const updated = await db.user.update({ where: { id }, data: { status: 'FROZEN' } })
     // full invalidation: freeze also revokes every session (L3 companion fix)
     await destroyAllUserSessions(id).catch(() => undefined)
+    securityLog('auth.freeze', { userId: id, adminId: admin.id })
     await logAdminAction({ adminId: admin.id, action: 'USER_FREEZE', targetType: 'user', targetId: id, before: { status: 'ACTIVE' }, after: { status: 'FROZEN' }, ip })
     return NextResponse.json({ ok: true, status: updated.status })
   }

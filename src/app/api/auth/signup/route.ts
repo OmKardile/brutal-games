@@ -15,6 +15,7 @@ import { registerDevice } from '@/lib/rewards/fraud'
 import { getSettings } from '@/lib/rewards/config'
 import { sanitizeNameInput, namePolicyError, nameKeyOf } from '@/lib/names'
 import { csrfBlocked } from '@/lib/http'
+import { securityLog } from '@/lib/security-log'
 
 export const dynamic = 'force-dynamic'
 
@@ -81,6 +82,7 @@ export async function POST(req: NextRequest) {
   const user = await db.user.create({
     data: { email, name, nameKey, passwordHash: await hashPassword(password) },
   })
+  securityLog('auth.signup', { userId: user.id })
 
   // device fingerprint + fraud signals (flag-only, never blocks signup)
   try {

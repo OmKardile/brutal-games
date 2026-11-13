@@ -135,6 +135,7 @@ QA.md               pre-ship checklist (run before any game ships)
 - [business-documentation.md](business-documentation.md) — reward program mechanics + admin runbook
 - [docs/threat-model.md](docs/threat-model.md) — security threat model + phased hardening plan
 - [docs/anti-cheat.md](docs/anti-cheat.md) — anti-cheat layers A-F: architecture + operations runbook
+- [docs/incident-runbook.md](docs/incident-runbook.md) — security incident playbook (freeze, rotate, communicate)
 - [SECURITY.md](SECURITY.md) — security controls overview, PR review checklist, disclosure contact
 - [decisions.md](decisions.md) — architecture decision records
 - [help.md](help.md) — player & admin FAQ
@@ -158,7 +159,12 @@ untrusted. Since v0.8 (hardening phase 2):
   exponential-backoff lockout + captcha escalation; rate limiting persists in
   SQLite; every mutation route checks Origin + JSON content-type; production
   boots only with real secrets (`SESSION_SECRET`, `DAILY_SALT`).
-- Deploys behind a reverse proxy must set `TRUSTED_PROXY=1` (see .env.example).
+- Deploys behind a reverse proxy must set `TRUSTED_PROXY=1` (see
+  .env.example); production Caddy template in `deploy/Caddyfile` (auto-HTTPS,
+  body caps, hardened headers); container runs non-root on loopback.
+- Full security-header set (strict CSP, HSTS, …) on the dynamic deploy;
+  structured security logging + webhook alerts; incident runbook at
+  [docs/incident-runbook.md](docs/incident-runbook.md).
 
 A fan tribute, not affiliated with ahwoo. Rewards payouts involve real money and require
 legal/tax review before going live — see business-documentation.md. Security hardening
