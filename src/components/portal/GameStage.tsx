@@ -19,6 +19,7 @@ import { RewardsHud } from '@/components/RewardsHud'
 import { GameArt } from '@/components/portal/GameArt'
 import {
   OwnPortalAdapter,
+  PerfOverlay,
   createInputRecorder,
   hashString,
   type InputRecorder,
@@ -275,6 +276,14 @@ export function GameStage(props: GameStageProps) {
       recorderRef.current?.stop()
       recorderRef.current = null
     }
+  }, [mode])
+
+  // dev/QA perf overlay (?perf=1): fps + frame time + heap, zero bytes otherwise
+  useEffect(() => {
+    if (mode !== 'playing' || !PerfOverlay.wanted()) return
+    const overlay = new PerfOverlay()
+    overlay.mount()
+    return () => overlay.destroy()
   }, [mode])
 
   const toggleFullscreen = useCallback(() => {
