@@ -3,6 +3,59 @@
 All notable changes to BRUTAL//GAMES. Dates are UTC. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions are ours, not semver-strict.
 
+## [0.9.0] — 2026-11-13
+
+### Security — hardening program phase 3 (signed run sessions + heartbeat hardening + score plausibility)
+
+Anti-cheat Layers A-C from docs/threat-model.md §7, now documented end-to-end
+in the new **docs/anti-cheat.md** (architecture + operations runbook). Closes
+H3 and H4; the leaderboard path is now token-gated end to end. `REWARDS_ENABLED`
+stays false. Rationale: ADR-024.
+
+**Layer A — signed run sessions (`src/lib/run-token.ts`)**
+- Run tokens are now HMAC-SHA256-signed payloads binding `userId, game, seed,
+  nonce, SERVER startedAt, kid`. Signature verification runs BEFORE any DB
+  access — forged/tampered/foreign-user tokens never touch SQLite.
+- Key-id rotation: `RUN_TOKEN_KEYS="id:hex,…"` — last entry signs, all verify
+  (append → deploy → retire). Unset: derived from SESSION_SECRET (ss-v1).
+- Duration for plausibility is computed from the SIGNED startedAt
+  (untamperable server clock); sessions older than 6h cannot be scored
+  (STALE_SESSION). Single-use claims and one-run-per-account unchanged.
+
+**Layer B — heartbeat integrity**
+- Hash-chain challenge: run/start returns a challenge; every beat must echo
+  `sha256(challenge)` and receives the next one. Replays and scripts that
+  don't read responses fail with 409 BAD_CHALLENGE. (Breaking for cached
+  pre-0.9 tabs: they stop earning until reload.)
+- Activity signals (flag-only, last 48 beats kept): client rAF frame count
+  vs server elapsed → SPEED_HACK (fast) / HEADLESS (slow) flags; ≥10 identical
+  non-zero input counts → LOW_ENTROPY flag.
+
+**Layer C — plausibility + statistics**
+- Ranked DAILY submissions now require a run token that binds the exact
+  server daily seed (plus the existing seed-match + manifest checks) —
+  tokenless daily runs are display-only.
+- Ranked global scores are classified against own history (last 20) and the
+  game population (last 500): z≥5 AND 3× own max → ANOMALY flag (MEDIUM),
+  z≥3 or 2× own max → LOW flag. Flag-only — entries stay ranked for human
+  review; new accounts (<5 samples) exempt from statistical flagging.
+
+**Client**
+- run-session-client tracks the challenge; RewardsHud sends the chain echo +
+  rAF frame count; game pages pass the daily seed to beginRun; GameStage
+  includes the run token in daily submissions.
+
+**Tests**: 161 pass (was 142) — new `tests/anti-cheat.test.ts` (sign/verify
+round-trip, tamper rejection, key rotation, challenge chain incl. replay +
+forged + foreign-token rejections, entropy/drift pure checks, daily seed
+claims, stale sessions, statistical classification) and scores-service tests
+re-based on the signed-token era.
+
+### Changed
+- docs/anti-cheat.md new (architecture + ops runbook); technical docs, README,
+  help, compact, threat-model status updated (H3/H4 closed, T2/T4/T6 mitigated
+  to "bounded/flagged"). .env.example documents RUN_TOKEN_KEYS.
+
 ## [0.8.0] — 2026-11-13
 
 ### Security — hardening program phase 2 (auth/session + API baseline + persistent rate limiting + `/api/scores` lock-down)

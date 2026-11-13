@@ -54,11 +54,12 @@ export async function POST(req: NextRequest) {
     console.error('registerDevice failed', err)
   }
 
-  const { token, intervalSec } = await startPlaySession(
+  const { token, intervalSec, challenge } = await startPlaySession(
     user.id,
     parsed.success ? (parsed.data.game ?? null) : null,
+    null, // legacy rewards clients never bind a seed
     settings,
     ip,
   )
-  return NextResponse.json({ token, intervalSec })
+  return NextResponse.json({ token, intervalSec, challenge })
 }

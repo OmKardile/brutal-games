@@ -104,38 +104,40 @@ NEXT_PUBLIC_ANALYTICS_ENDPOINT/SITE (optional), NEXT_PUBLIC_CONSENT_BANNER
   boards fall back to localStorage; daily runs → local UNRANKED. For correct
   absolute sitemap/canonicals set APP_URL to the Pages origin.
 
-## Security program (v0.8.0, active directive)
-- **docs/threat-model.md** is the contract: audit findings (C1-C3/H1-H8/M1-M9),
-  20-card threat catalogue, phased plan §7. Phase 1 (audit + model) DONE.
-  **Phase 2 DONE (v0.8.0)** — ADR-021/022/023, SECURITY.md added.
-- Phase 2 shipped: argon2id + rehash-on-login + min-10 policy + optional HIBP;
-  per-account+per-IP login backoff lockout (5→15s→…→60min) + Turnstile after 3
-  fails + dummy-verify; PERSISTENT SQLite rate limiter (RateLimitBucket) +
-  trusted-proxy clientIp (rightmost untrusted XFF); CSRF Origin/Host + JSON
-  content-type on every mutation; SESSION_SECRET/DAILY_SALT fail-hard in prod;
-  freeze revokes sessions + authUser rejects frozen; /api/scores locked down
-  (session required; ranked needs run token from new /api/run/start — CSPRNG,
-  game-bound, single-use scoreClaimedAt claim, server-duration plausibility;
-  tokenless = display-only off the ranked board; guests = local board + sign-in
-  hint); board names = account callsigns (User.nameKey unique, sanitized,
-  reserved/leet/profanity policy; PILOT-XXXX auto-assign; set on /rewards);
-  GET/POST /api/auth/sessions (list + log out everywhere/others) + POST
-  /api/auth/profile; rewards/session/start = legacy compat wrapper; deps pruned
-  -21 (next-auth gone); tests 142 (was 102).
-- Still open from the audit: H2 headers (phase 6), H3 heartbeat client-asserted
-  (phase 3), H4 opaque token → HMAC+key-id (phase 3), H5 admin 2FA/audit/self-
+## Security program (v0.9.0, active directive)
+- **docs/threat-model.md** is the contract; **docs/anti-cheat.md** is the
+  layer architecture + ops runbook; SECURITY.md = operations.
+  Phase 1 (audit) DONE. **Phase 2 DONE (v0.8.0)** — ADR-021/022/023.
+  **Phase 3 DONE (v0.9.0)** — ADR-024.
+- Phase 3 shipped: HMAC-signed run tokens (userId/game/seed/nonce/server
+  startedAt/kid; offline verify before DB; key-id rotation via RUN_TOKEN_KEYS,
+  fallback derived from SESSION_SECRET; 6h stale window; duration from the
+  SIGNED startedAt); heartbeat hash-chain challenge (echo sha256(prev
+  challenge), rotated per beat — replays/dumb scripts 409 BAD_CHALLENGE);
+  beatLog activity signals (frames→speed-hack/headless flags, input-entropy
+  flag — flag-only); ranked dailies require seed-bound token claims; ranked
+  scores statistically classified (z vs population + own-history multiple;
+  watch/anomaly flags; <5 own samples exempt).
+- Phase 2 recap: argon2id+rehash-on-login+min-10+HIBP; per-account+per-IP
+  login backoff+Turnstile escalation+dummy-verify; persistent SQLite rate
+  limiter + trusted-proxy clientIp; CSRF Origin+JSON everywhere; secrets
+  fail-hard in prod; freeze revokes sessions; /api/scores locked (session +
+  run token, single-use claim, plausibility vs server clock; tokenless =
+  display-only; guests = local board); account-callsign board names
+  (nameKey unique + policy); /api/auth/sessions + /api/auth/profile; deps
+  pruned -21; SECURITY.md.
+- Still open from the audit: H2 headers (phase 6), H5 admin 2FA/audit/self-
   approval (phase 5), H8 payout races (phase 5), M1 privacy hashing/retention
-  (phase 4), M3/M4 board integrity/moderation (phase 4), M6 payout gating
-  (phase 4/5), M7 monitoring/runbook (phase 6), M8 hygiene (partial: deps done,
-  gitleaks/audit cadence phase 8), M9 payouts kill switch (phase 5), L1 dead
-  /api route (phase 6).
+  (phase 4), M3/M4 board integrity/moderation + pending verification (phase
+  4), M6 payout gating (phase 4/5), M7 monitoring/runbook (phase 6), M8
+  hygiene (partial: deps done, gitleaks/audit cadence phase 8), M9 payouts
+  kill switch (phase 5), L1 dead /api route (phase 6).
 - Caddyfile ships a dev-only `?XTransformPort=` open local-proxy handler —
   must never reach production (phase 6 ships a hardened template).
 - Next phases (each: docs+CHANGELOG+tests, then WAIT FOR OK):
-  3 signed run sessions/heartbeat hardening/plausibility → 4 risk score/leaderboard
-  integrity/device signals → 5 payout integrity/admin 2FA+audit/kill switch →
-  6 headers/Caddy/backups/monitoring/runbook → 7 replay (deferred) →
-  8 abuse-test suite + scans + red-team.
+  4 risk score/leaderboard integrity/device signals → 5 payout integrity/admin
+  2FA+audit/kill switch → 6 headers/Caddy/backups/monitoring/runbook →
+  7 replay (deferred) → 8 abuse-test suite + scans + red-team.
 - REWARDS_ENABLED stays FALSE until phases 2-6 + 8 pass (ADR-020).
 - Standing rules: localStorage never carries value; server clock decides
   durations; authz only in route handlers (no middleware exists — keep it);

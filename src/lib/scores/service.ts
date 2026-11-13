@@ -17,6 +17,7 @@ import type { PrismaClient } from '@prisma/client'
 import { claimScoreForSession } from '@/lib/rewards/heartbeat'
 import { getGame } from '@/games/registry'
 import { claimDisplayName } from '@/lib/names'
+import { checkScoreAnomaly } from '@/lib/scores/stats'
 
 export const GAMES = ['arena', 'stack', 'reflex', 'dodge', 'merge'] as const
 export type Game = (typeof GAMES)[number]
@@ -55,6 +56,8 @@ export type RecordScoreResult =
       entry: BoardEntryRow
       rank: number
       board: BoardEntryRow[]
+      /** statistical evaluation vs own history + population (flag-only) */
+      anomaly?: 'ok' | 'watch' | 'anomaly' | null
     }
 
 /** seconds of slack so fast legit runs (early death) still pass the ceiling */
@@ -112,6 +115,9 @@ export async function recordScore(
 
   const board = await rankedBoard(input.game, dbx)
 
+  // statistical layer (flag-only — never blocks the entry)
+  const anomaly = ranked ? await checkScoreAnomaly(input.userId, input.game, input.score, dbx) : null
+
   return {
     kind: 'ok',
     ranked,
@@ -126,6 +132,7 @@ export async function recordScore(
     },
     rank,
     board,
+    anomaly: anomaly ? anomaly.level : null,
   }
 }
 

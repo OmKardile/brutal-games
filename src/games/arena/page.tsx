@@ -234,7 +234,7 @@ export default function ArenaRunner({ stage }: { stage?: StageProps }) {
     if (phase === 'playing' && !runActiveRef.current) {
       runActiveRef.current = true
       endRun()
-      void beginRun('arena')
+      void beginRun('arena', stage?.daily ? { seed: stage.daily.seed } : undefined)
     }
     if (phase === 'gameover' || phase === 'menu') {
       runActiveRef.current = false

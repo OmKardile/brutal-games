@@ -12,7 +12,12 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import type { GamePhase, RunStats } from '@/game/types'
 import { useToast } from '@/hooks/use-toast'
-import { subscribeRunToken } from '@/lib/run-session-client'
+import {
+  subscribeRunToken,
+  currentChallenge,
+  setChallenge,
+  sha256Hex,
+} from '@/lib/run-session-client'
 import { Coins } from 'lucide-react'
 
 interface Props {
@@ -26,6 +31,7 @@ interface HeartbeatResponse {
   todayEarned?: number
   todayCap?: number
   active?: boolean
+  nextChallenge?: string
 }
 
 export function RewardsHud({ phase, lastStats }: Props) {
@@ -146,6 +152,25 @@ export function RewardsHud({ phase, lastStats }: Props) {
     }
   }, [phase, enabled, userId, toast])
 
+  // rAF frame counter while playing — the server compares frames vs elapsed
+  // (speed-hack / headless drift signals; passive, never blocks gameplay)
+  const framesRef = useRef(0)
+  useEffect(() => {
+    if (phase !== 'playing') return
+    let raf = 0
+    let alive = true
+    const tick = () => {
+      if (!alive) return
+      framesRef.current++
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => {
+      alive = false
+      cancelAnimationFrame(raf)
+    }
+  }, [phase])
+
   // heartbeat interval while playing
   useEffect(() => {
     if (enabled !== true || phase !== 'playing') return
@@ -154,6 +179,10 @@ export function RewardsHud({ phase, lastStats }: Props) {
       if (!token) return
       const inputEvents = inputCountRef.current
       inputCountRef.current = 0
+      // hash-chain echo: sha256 of the challenge from the last response
+      const challenge = currentChallenge()
+      if (!challenge) return
+      const challengeResponse = await sha256Hex(challenge)
       try {
         const res = await fetch('/api/rewards/heartbeat', {
           method: 'POST',
@@ -162,15 +191,18 @@ export function RewardsHud({ phase, lastStats }: Props) {
             token,
             visible: document.visibilityState === 'visible',
             inputEvents,
+            frames: framesRef.current,
+            challengeResponse,
           }),
         })
         if (res.ok) {
           const data = (await res.json()) as HeartbeatResponse
+          setChallenge(data.nextChallenge)
           if (data.todayEarned !== undefined && data.todayCap !== undefined) {
             setToday({ earned: data.todayEarned, cap: data.todayCap })
           }
         } else if (res.status === 409 || res.status === 404) {
-          tokenRef.current = null // session ended server-side
+          tokenRef.current = null // session ended / chain broken — stop beating
         }
       } catch {
         // offline — next beat will retry

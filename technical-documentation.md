@@ -29,7 +29,7 @@ input events and drives the heartbeat API. No engine API changes.
 | `RateLimitBucket` | persistent rate-limit + lockout state: sliding-window hit array (JSON), consecutive-failure counter, `lockedUntil` (login backoff). Survives restarts |
 | `PointEvent` | append-only ledger. `points` ±, `reason`, unique `idempotencyKey`, `reversalOfId` (unique → one reversal per original) |
 | `DailyActivity` | per-user-per-IST-day rollup; enforces `DAILY_POINT_CAP`; streak marker |
-| `PlaySession` | run session (0.8: ALL runs, not just rewards): hashed CSPRNG token, `game` slug, server timestamps, beat counter, idle expiry (30 min), beat cap (240), `scoreClaimedAt` (single-use ranked-score claim) |
+| `PlaySession` | run session (0.8: ALL runs, not just rewards): HMAC-SIGNED token (uid/game/seed/nonce/server startedAt/kid — src/lib/run-token.ts; only sha256(token) stored), heartbeat hash-chain `challenge`, per-beat activity `beatLog` (input+frames, last 48), `scoreClaimedAt` (single-use ranked-score claim), `seed` binding for dailies |
 | `HighScore` | global board entry; `userId` + `ranked` (false = display-only, excluded from the competitive board) since 0.8 |
 | `MonthlyPool` | month (IST), net revenue (paise), share %, status DRAFT→LOCKED, `leftoverMinor`, `voidedMinor` |
 | `PoolDistribution` | immutable per-user snapshot at lock: points, raw share, capped share |
@@ -92,8 +92,11 @@ behind a reverse proxy; headers ignored otherwise).
 
 - **Threat model + phased hardening plan: [docs/threat-model.md](docs/threat-model.md)**
   and **[SECURITY.md](SECURITY.md)** (controls overview + review checklist +
-  disclosure contact). Phase 2 (this release) fixed C1/C3/H1/H6/H7/M2/M5/L2/L3;
-  rewards stay disabled until phases 2-6 + 8 pass.
+  disclosure contact) and **[docs/anti-cheat.md](docs/anti-cheat.md)** (layer
+  architecture + ops runbook). Phases 1-3 shipped (0.7.1/0.8.0/0.9.0):
+  auth/API-baseline/CSRF/persistent-RL/scores lock-down + signed run tokens +
+  heartbeat hash-chain + plausibility/statistics. Rewards stay disabled until
+  phases 2-6 + 8 pass.
 - Passwords: argon2id via `Bun.password` (legacy scrypt verifiable + rehash-on-
   login), min length 10, no composition rules; optional HIBP breached-password
   rejection (`HIBP_CHECK=1`, k-anonymity, fails open). Login has per-account +
@@ -115,15 +118,20 @@ behind a reverse proxy; headers ignored otherwise).
   Freezing/voiding is always a human action.
 - Board names: account callsigns only — policy sanitization, reserved names
   (leet-aware), blocklist (`NAME_BLOCKLIST` env), case-insensitive uniqueness.
-- Known limits: run stats are client-reported (mitigated by session-duration
-  plausibility checks + daily caps + review); play-session tokens are opaque
-  bearer tokens until phase 3 adds HMAC binding + key rotation; VPN/datacenter
-  detection is a static admin-editable list (no GeoIP service); IPv6 list
-  matching is exact-match only.
+- Anti-cheat (0.9): run tokens are HMAC-signed with key-id rotation
+  (`RUN_TOKEN_KEYS`); verification is offline (before any DB access); ranked
+  dailies must bind the exact server seed; ranked scores are statistically
+  classified (own history + population, flag-only); heartbeats carry a
+  rotating challenge echo (replays → 409) plus frame-drift/input-entropy
+  signals; sessions older than 6h cannot be scored.
+- Known limits: statistical and activity signals are FLAG-ONLY (humans decide;
+  Layer D replay verification is deferred until the engines are deterministic);
+  VPN/datacenter detection is a static admin-editable list (no GeoIP service);
+  IPv6 list matching is exact-match only.
 
 ## Testing
 
-`bun test tests/` — 142 tests. `payout-math.test.ts` (pure edge cases: zero revenue,
+`bun test tests/` — 161 tests. `payout-math.test.ts` (pure edge cases: zero revenue,
 zero points, caps, rounding residue, thresholds), `ledger.test.ts` (real temp SQLite DB:
 idempotency, daily-cap clamps, streaks, reversal semantics, month clamping, gates),
 `rewards-logic.test.ts` (heartbeat timing, run plausibility, IST boundaries, IP/CIDR
@@ -132,7 +140,7 @@ matching, fingerprint stability, challenge determinism), `auth-hardening.test.ts
 backoff math), `rate-limit.test.ts` (persistent sliding window, restart persistence,
 lockout state machine), `scores-service.test.ts` (ranked-with-token, replay burn,
 foreign/mismatched/aborted tokens, implausible scores, callsign claims,
-ranked-only boards).
+ranked-only boards), `anti-cheat.test.ts` (token signing/rotation/tamper, heartbeat challenge chain + replay/forgery, entropy/drift, daily seed claims, statistical classification).
 
 ## Operations
 

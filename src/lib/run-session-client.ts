@@ -1,10 +1,13 @@
 'use client'
 
-// Run-session client (0.8): the single owner of the CURRENT run token.
+// Run-session client (0.8/0.9): the single owner of the CURRENT run token.
 //
 // One session per run, shared by every consumer:
 //  - ranked score submission (scores-client reads the token at submit time)
-//  - RewardsHud heartbeats + run-end (subscribes to token changes)
+//  - RewardsHud heartbeats + run-end (subscribes to token changes; beats carry
+//    the hash-chain response: sha256 of the challenge from the last response)
+//  - daily submissions (GameStage includes the token; the session binds the
+//    daily seed when beginRun is called with one)
 // beginRun() is called by each game page when the run actually starts; it
 // no-ops for guests (401) and offline — those runs simply stay unranked /
 // fall back to the local board. A new run replaces the previous token (the
@@ -14,6 +17,7 @@ import { apiUrl } from '@/lib/api-base'
 import type { GameId } from '@/lib/scores-client'
 
 let token: string | null = null
+let challenge: string | null = null
 let starting = false
 const listeners = new Set<(t: string | null) => void>()
 
@@ -29,6 +33,11 @@ function notify() {
 
 export function currentRunToken(): string | null {
   return token
+}
+
+/** Current heartbeat challenge (echo sha256(challenge) on the next beat). */
+export function currentChallenge(): string | null {
+  return challenge
 }
 
 export function subscribeRunToken(fn: (t: string | null) => void): () => void {
@@ -49,19 +58,39 @@ export function collectSignals() {
   }
 }
 
-/** Open a run session. Idempotent while a token is alive or a start is pending. */
-export async function beginRun(game: GameId): Promise<string | null> {
+/** Browser-side SHA-256 → hex (used for the heartbeat challenge echo). */
+export async function sha256Hex(s: string): Promise<string> {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s))
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+/**
+ * Open a run session. Idempotent while a token is alive or a start is pending.
+ * Pass the daily seed to bind the session to it (required for ranked daily
+ * submissions).
+ */
+export async function beginRun(
+  game: GameId,
+  opts?: { seed?: number },
+): Promise<string | null> {
   if (token || starting) return token
   starting = true
   try {
     const res = await fetch(apiUrl('/api/run/start'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ game, signals: collectSignals() }),
+      body: JSON.stringify({
+        game,
+        ...(opts?.seed !== undefined ? { seed: opts.seed } : {}),
+        signals: collectSignals(),
+      }),
     })
     if (res.ok) {
-      const data = (await res.json()) as { token: string }
+      const data = (await res.json()) as { token: string; challenge?: string }
       token = data.token
+      challenge = data.challenge ?? null
       notify()
       return token
     }
@@ -79,6 +108,12 @@ export async function beginRun(game: GameId): Promise<string | null> {
 export function endRun(): void {
   if (token) {
     token = null
+    challenge = null
     notify()
   }
+}
+
+/** Track the challenge returned by a heartbeat response. */
+export function setChallenge(next: string | undefined | null): void {
+  challenge = next ?? null
 }

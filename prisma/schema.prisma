@@ -151,22 +151,28 @@ model DailyActivity {
 }
 
 // A run session is opened when a run starts (POST /api/run/start); the server
-// returns an opaque CSPRNG token. Heartbeats and score submission must present
-// this token. Server timestamps only. One open session per user; a new run
-// aborts the previous. `scoreClaimedAt` makes the token single-use for ranked
-// score submission while rewards run-end uses `endedAt` — order-independent.
+// returns an HMAC-signed token (userId, game, seed, nonce, server startedAt,
+// key id — see src/lib/run-token.ts). Heartbeats and score submission must
+// present this token. Server timestamps only. One open session per user; a
+// new run aborts the previous. `scoreClaimedAt` makes the token single-use
+// for ranked score submission while rewards run-end uses `endedAt` —
+// order-independent. `challenge` drives the heartbeat hash chain; `beatLog`
+// keeps the last beats' activity samples for entropy/drift analysis (phase 3).
 model PlaySession {
   id         String    @id @default(cuid())
   userId     String
   user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   tokenHash  String    @unique
   game       String? // slug of the game being run (arena | stack | ...)
+  seed       Int? // seed the run is bound to (daily challenges); null = casual
   startedAt  DateTime  @default(now())
   lastBeatAt DateTime?
   endedAt    DateTime?
   endedReason String?  // RUN_END | EXPIRED | ABORTED
   beats      Int       @default(0)
   scoreClaimedAt DateTime? // set when a ranked score was submitted against this run
+  challenge  String? // current heartbeat challenge (hash-chain head; rotated each beat)
+  beatLog    String? // JSON array of {i: inputEvents, f: frames} — last 48 beats
   ip         String?
   createdAt  DateTime  @default(now())
 

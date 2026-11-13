@@ -26,6 +26,7 @@ import {
   type RunSummary,
 } from '@/game-kit'
 import { recallPlayerName } from '@/lib/scores-client'
+import { currentRunToken } from '@/lib/run-session-client'
 import { useToast } from '@/hooks/use-toast'
 import type { GameSlug } from '@/games/types'
 import type { DailyInfo } from '@/games/runner-types'
@@ -185,6 +186,7 @@ export function GameStage(props: GameStageProps) {
             durationMs: summary.durationMs,
             seed: info.seed,
             ranked: info.ranked,
+            runToken: currentRunToken() ?? undefined,
             inputLog,
             clientStreak: guestStreak ?? undefined,
           }),

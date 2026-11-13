@@ -134,7 +134,7 @@ export default function MergeRunner({ stage }: { stage?: StageProps }) {
           setNewBest(false)
           // fresh server-side run session for this run (ranked submission)
           endRun()
-          void beginRun('merge')
+          void beginRun('merge', stage?.daily ? { seed: stage.daily.seed } : undefined)
         } else if (ev.phase === 'over') {
           window.setTimeout(() => {
             const stats = statsRef.current

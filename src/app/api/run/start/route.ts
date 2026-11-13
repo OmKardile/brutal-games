@@ -12,6 +12,8 @@ export const dynamic = 'force-dynamic'
 
 const Schema = z.object({
   game: z.enum(['arena', 'stack', 'reflex', 'dodge', 'merge']).optional(),
+  /** seed the run is bound to (daily challenges) — verified at submission */
+  seed: z.number().int().min(0).max(0xffffffff).optional(),
   signals: z.record(z.string(), z.unknown()).optional(),
 })
 
@@ -22,8 +24,10 @@ const Schema = z.object({
  * Auth required, but NO 18+/rewards coupling: the session serves leaderboard
  * integrity (ranked score submission needs its token). Points still flow only
  * through the rewards paths, which enforce consent/caps at award time.
- * Returns a CSPRNG token; only its sha256 is stored. One open session per
- * account — starting a new run aborts the previous one.
+ * Returns an HMAC-SIGNED token (userId, game, seed, nonce, server startedAt,
+ * key id) plus the first heartbeat challenge; only the token's sha256 is
+ * stored. One open session per account — starting a new run aborts the
+ * previous one.
  */
 export async function POST(req: NextRequest) {
   const csrf = csrfBlocked(req)
@@ -55,11 +59,12 @@ export async function POST(req: NextRequest) {
     console.error('registerDevice failed', err)
   }
 
-  const { token, intervalSec } = await startPlaySession(
+  const { token, intervalSec, challenge } = await startPlaySession(
     user.id,
     parsed.data.game ?? null,
+    parsed.data.seed ?? null,
     settings,
     ip,
   )
-  return NextResponse.json({ token, intervalSec })
+  return NextResponse.json({ token, intervalSec, challenge })
 }

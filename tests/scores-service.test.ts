@@ -10,7 +10,8 @@ import { join } from 'node:path'
 import { createHash } from 'node:crypto'
 import { PrismaClient } from '@prisma/client'
 import { recordScore, rankedBoard, boardTotals } from '../src/lib/scores/service'
-import { startPlaySession, claimScoreForSession } from '../src/lib/rewards/heartbeat'
+import { startPlaySession, claimScoreForSession, claimDailyScoreForSession } from '../src/lib/rewards/heartbeat'
+import { signRunToken } from '../src/lib/run-token'
 import { DEFAULT_SETTINGS } from '../src/lib/rewards/config'
 import { claimDisplayName } from '../src/lib/names'
 
@@ -45,12 +46,24 @@ async function mkUser(email: string): Promise<string> {
   return u.id
 }
 
-/** Backdate a session so server-measured duration is realistic. */
-async function mkRun(userId: string, game: string, startedAgoSec: number): Promise<string> {
-  const { token } = await startPlaySession(userId, game, settings, 'test', db)
-  const startedAt = new Date(Date.now() - startedAgoSec * 1000)
-  const tokenHash = createHash('sha256').update(token).digest('hex')
-  await db.playSession.update({ where: { tokenHash }, data: { startedAt } })
+/**
+ * Create a run session with a backdated start (server-signed startedAt in the
+ * token + matching row) so server-measured duration is realistic.
+ */
+async function mkRun(userId: string, game: string, startedAgoSec: number, seed: number | null = null): Promise<string> {
+  const startedAt = Date.now() - startedAgoSec * 1000
+  const token = signRunToken({ uid: userId, game, seed, startedAt })
+  await db.playSession.create({
+    data: {
+      userId,
+      tokenHash: createHash('sha256').update(token).digest('hex'),
+      game,
+      seed,
+      startedAt: new Date(startedAt),
+      ip: 'test',
+      challenge: 'test-challenge',
+    },
+  })
   return token
 }
 
@@ -134,7 +147,7 @@ describe('recordScore — ranked requires a valid run token', () => {
     const uid = await mkUser('aborted@test')
     const token = await mkRun(uid, 'arena', 60)
     // a newer run supersedes it server-side
-    await startPlaySession(uid, 'arena', settings, 'test', db)
+    await startPlaySession(uid, 'arena', null, settings, 'test', db)
     const res = await recordScore(
       { userId: uid, game: 'arena', score: 1_000, wave: 3, kills: 30, runToken: token },
       db,

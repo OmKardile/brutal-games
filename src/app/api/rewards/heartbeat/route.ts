@@ -9,9 +9,13 @@ import { limit, tooMany } from '@/lib/rate-limit'
 export const dynamic = 'force-dynamic'
 
 const Schema = z.object({
-  token: z.string().min(20).max(200),
+  token: z.string().min(20).max(1024),
   visible: z.boolean(),
   inputEvents: z.number().int().min(0).max(1_000_000),
+  /** rAF frames rendered since run start (drift signal; optional but checked when present) */
+  frames: z.number().int().min(0).max(100_000_000).optional(),
+  /** sha256 of the challenge from the previous response (hash chain) */
+  challengeResponse: z.string().regex(/^[0-9a-f]{64}$/),
 })
 
 export async function POST(req: NextRequest) {
@@ -36,7 +40,11 @@ export async function POST(req: NextRequest) {
 
   const result = await processHeartbeat(user.id, settings, user, parsed.data)
   if (!result.ok) {
-    const status = result.code === 'TOO_FAST' ? 429 : result.code === 'SESSION_NOT_FOUND' ? 404 : 409
+    const status =
+      result.code === 'TOO_FAST' ? 429
+        : result.code === 'SESSION_NOT_FOUND' ? 404
+          : result.code === 'BAD_CHALLENGE' ? 409
+            : 409
     return NextResponse.json({ error: result.code }, { status })
   }
   return NextResponse.json(result)

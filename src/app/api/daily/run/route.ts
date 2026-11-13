@@ -13,6 +13,7 @@ import {
 import { extendStreak, mergeStreaks, type StreakState } from '@/lib/daily/streaks'
 import { dailySeedFor, seedMatches } from '@/lib/daily/seed'
 import { dateKeyForTz, previousDateKey } from '@/lib/daily/tz'
+import { claimDailyScoreForSession } from '@/lib/rewards/heartbeat'
 import { csrfBlocked } from '@/lib/http'
 import { limit, tooMany } from '@/lib/rate-limit'
 import { getSessionUser } from '@/lib/auth/session'
@@ -32,6 +33,8 @@ const RunSchema = z.object({
   seed: z.number().int().min(0).max(0xffffffff),
   /** client asserts it used the server seed (offline fallback = false) */
   ranked: z.boolean().default(true),
+  /** signed run token from /api/run/start (required for RANKED submissions) */
+  runToken: z.string().min(20).max(1024).optional(),
   inputLog: z.string().max(32_768).optional().nullable(),
   /** guest streak from localStorage, merged into the server streak on sync */
   clientStreak: z
@@ -98,8 +101,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Run rejected: ${verdict.reason}` }, { status: 422 })
   }
 
-  // ranking: only runs on the exact server seed count as ranked
-  const ranked = run.ranked && seedMatches(run.game, run.dateKey, run.seed)
+  // ranking (phase 3): a run counts as RANKED only when
+  //  1. the client asserts it played the server seed, AND
+  //  2. the seed matches the authoritative daily seed, AND
+  //  3. a signed run token is presented that binds exactly that seed and game
+  //     (single-use claim against the server-clocked session)
+  let ranked = run.ranked && seedMatches(run.game, run.dateKey, run.seed)
+  if (ranked) {
+    if (preUser && preUser.status === 'ACTIVE' && run.runToken) {
+      const claim = await claimDailyScoreForSession(
+        preUser.id,
+        run.runToken,
+        { game: run.game, seed: run.seed },
+        db,
+      )
+      if (!claim.ok) {
+        ranked = false // token missing/invalid/reused/seed-mismatched → display-only
+      }
+    } else {
+      ranked = false // no session user or no token → display-only
+    }
+  }
 
   const activeUser = preUser && preUser.status === 'ACTIVE' ? preUser : null
 

@@ -289,3 +289,39 @@ approved UX trade-off). Extra columns: `HighScore.userId/ranked`,
 `PlaySession.game/scoreClaimedAt`, `User.nameKey`; new `RateLimitBucket` table.
 Phase 3 upgrades the token itself to HMAC-signed with key-id rotation and adds
 heartbeat nonce chains + statistical checks.
+
+## ADR-024 — Signed run tokens, heartbeat hash-chain, statistical flags (phase 3)
+
+Date: 2026-11-13 · Status: accepted (phase 3)
+
+**Context.** Phase 2 left the run token an opaque CSPRNG bearer string (H4
+partial), heartbeat activity client-asserted (H3), and score validation
+limited to manifest ceilings (T2 residual high).
+
+**Decision.**
+1. Run tokens are HMAC-SHA256-signed payloads binding `userId, game, seed,
+   nonce, server startedAt, kid` (src/lib/run-token.ts). Signature
+   verification happens BEFORE any DB access — forged/tampered/foreign tokens
+   die offline. Key ids support rotation via `RUN_TOKEN_KEYS` (last entry
+   signs, all verify; derived-from-SESSION_SECRET fallback). Duration for
+   plausibility is computed from the SIGNED startedAt (untamperable); sessions
+   older than 6h cannot be scored.
+2. Heartbeats carry a rotating hash-chain challenge (echo sha256 of the last
+   response): replays and scripts that don't read responses fail with
+   BAD_CHALLENGE. Per-beat activity samples (input counts, rAF frames) are
+   kept (last 48): identical non-zero input counts over >=10 beats flag
+   LOW_ENTROPY; frame-rate vs server elapsed flags SPEED_HACK (fast) or
+   HEADLESS (slow) — all flag-only.
+3. Ranked DAILY submissions must present a token that binds the exact server
+   daily seed (claimDailyScoreForSession) — no token, no ranking.
+4. Ranked global scores get a statistical layer: classification vs own
+   history (last 20) + population (last 500) — watch (z>=3 or 2x own max)
+   LOW flag, anomaly (z>=5 AND 3x own max) MEDIUM flag. Flag-only; new
+   accounts (<5 samples) exempt.
+
+**Consequences.** dumb farming scripts and token forgeries are structurally
+dead; sophisticated clients can still fabricate activity signals (bounded by
+caps + ceilings — documented in docs/anti-cheat.md). The heartbeat API is
+breaking for old cached clients (challenge required) — they stop earning
+until reload, acceptable. PlaySession gains seed/challenge/beatLog columns.
+docs/anti-cheat.md is the architecture + operations companion.

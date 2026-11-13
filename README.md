@@ -134,6 +134,7 @@ QA.md               pre-ship checklist (run before any game ships)
 - [technical-documentation.md](technical-documentation.md) — architecture, data model, APIs, security
 - [business-documentation.md](business-documentation.md) — reward program mechanics + admin runbook
 - [docs/threat-model.md](docs/threat-model.md) — security threat model + phased hardening plan
+- [docs/anti-cheat.md](docs/anti-cheat.md) — anti-cheat layers A-F: architecture + operations runbook
 - [SECURITY.md](SECURITY.md) — security controls overview, PR review checklist, disclosure contact
 - [decisions.md](decisions.md) — architecture decision records
 - [help.md](help.md) — player & admin FAQ
@@ -147,10 +148,10 @@ The browser is hostile: every client-sent score, duration and heartbeat is
 untrusted. Since v0.8 (hardening phase 2):
 
 - **Global boards are account-gated.** Posting to `/api/scores` requires an
-  account; a RANKED entry additionally requires a server-issued run token
-  (`POST /api/run/start` at run start, single-use, validated against the
-  server-measured duration + manifest plausibility). Guests keep a per-browser
-  local board with a "sign in to rank" hint.
+  account; a RANKED entry additionally requires a server-issued, HMAC-SIGNED
+  run token (`POST /api/run/start` at run start — binds user, game and daily
+  seed to the server clock; single-use; key-id rotation via `RUN_TOKEN_KEYS`).
+  Guests keep a per-browser local board with a "sign in to rank" hint.
 - **Board names are account callsigns** — one per account, case-insensitive
   unique, sanitized + blocklisted, settable on /rewards. No impersonation.
 - Passwords are argon2id (min 10 chars); login has per-account/per-IP

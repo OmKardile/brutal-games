@@ -107,7 +107,7 @@ export default function StackRunner({ stage }: { stage?: StageProps }) {
           setNewBest(false)
           // fresh server-side run session for this run (ranked submission)
           endRun()
-          void beginRun('stack')
+          void beginRun('stack', stage?.daily ? { seed: stage.daily.seed } : undefined)
         } else if (ev.phase === 'over') {
           // let the crumble animation breathe before the overlay lands
           window.setTimeout(() => {
