@@ -5,7 +5,7 @@ changed in this phase. Audit basis: clean tree at `df2716a`, v0.7.0, 102/102
 tests green. Every claim below was verified against the current source in
 Nov 2026; file references are live code paths.
 
-> **STATUS UPDATE — phase 2 SHIPPED (v0.8.0) + phase 3 SHIPPED (v0.9.0):**
+> **STATUS UPDATE — phases 2-4 SHIPPED (v0.8.0 / v0.9.0 / v0.9.1):**
 > Phase 2 fixed C1, C3, H1, H6, H7, M2, M5, L2, L3 (argon2id + login
 > lockout/escalation, persistent SQLite rate limiting, trusted-proxy clientIp,
 > CSRF baseline on all mutations, fail-hard production secrets, /api/scores
@@ -14,10 +14,14 @@ Nov 2026; file references are live code paths.
 > Phase 3 fixed H3 and H4 (HMAC-signed run tokens with key-id rotation +
 > offline verification, hash-chain heartbeat challenges, beat activity logs,
 > speed-hack/headless/low-entropy flags, seed-bound ranked dailies, 6h stale
-> window, statistical anomaly flags; see docs/anti-cheat.md). T1 is dead
-> (auth+token+plausibility); T2 mitigated to "plausible-only + flagged";
-> T4 bounded + signal-visible; T6 dead (HMAC + single-use). Remaining: H2
-> (phase 6), H5/H8 (phase 5), M1/M3/M4/M6 (phase 4/5), M7/M9 (phase 6/5).
+> window, statistical anomaly flags; see docs/anti-cheat.md).
+> Phase 4 fixed M1 (HMAC fingerprints + hashed IPs + 90-day purge), M3/M4
+> (top-3 + HIGH-risk entries pending verification, moderation/removal with
+> rank recompute, confirmed-fraud users never rank) and M6 (payout gating:
+> 72h age + 3 active days + risk hold; 48h halved-cap cooling; unique UPI
+> destination per account) — explainable risk scoring with auto-HOLD at 40+
+> (never a ban). T5 now bounded by gating + cooling + clustering. Remaining:
+> H2 (phase 6), H5/H8 (phase 5), M7/M9 (phase 6/5), L1 (phase 6).
 > Route table below reflects the PRE-0.8 state and is refreshed at each gate.
 
 Core principle (governs everything below): **the browser is hostile.** Anything

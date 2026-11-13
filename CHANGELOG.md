@@ -3,6 +3,56 @@
 All notable changes to BRUTAL//GAMES. Dates are UTC. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions are ours, not semver-strict.
 
+## [0.9.1] — 2026-11-13
+
+### Security — hardening program phase 4 (risk scoring, board integrity, account/device signals)
+
+Anti-cheat Layers E-F from docs/threat-model.md §7 / docs/anti-cheat.md.
+Closes M1 (privacy), M3/M4 (board integrity/moderation), M6 (payout gating).
+`REWARDS_ENABLED` stays false. Rationale: ADR-025.
+
+**Explainable risk scoring (`src/lib/risk.ts`)**
+- Flags score LOW=3 / MEDIUM=10 / HIGH=25 per type (confirmed ×2, dismissed
+  0); bands: 0-14 LOW (normal), 15-39 MEDIUM (manual review queue), 40+ HIGH
+  = **auto-HOLD**: ranked entries go pending-verification and payouts are
+  blocked pending review — never a ban, appeal path = flags queue + contact.
+  Every assessment carries its full reason breakdown.
+
+**Leaderboard integrity (M3/M4)**
+- New entries that would enter a board's TOP-3 (and every ranked entry from a
+  HIGH-risk user) are stored `pending` and hidden from boards + totals until
+  verified. Pending entries from LOW-risk users auto-release after 24h
+  (opportunistic sweep on board reads); admins can verify instantly.
+- Moderation: soft-removal (removedAt/By/Reason — kept for audit, never
+  rendered; ranks recompute on read) + restore. New admin BOARDS tab with
+  pending + removed queues for global and daily boards.
+- Players with a CONFIRMED fraud flag can never rank again — their
+  submissions stay display-only (rankReason CONFIRMED_FRAUD).
+
+**Payout gating + cooling (M6)**
+- First payout requires: account age ≥72h, ≥3 distinct active days, non-HIGH
+  risk (clear error codes: ACCOUNT_TOO_NEW / NEED_ACTIVITY / RISK_HOLD).
+- New accounts (<48h) earn against a halved daily point cap (cooling).
+- UPI destination uniqueness: normalized `User.upiKey` unique — one account
+  per payout destination; reuse blocked with 409 + UPI_REUSE flag.
+
+**Privacy (M1)**
+- Fingerprints + IPs stored as keyed HMACs (FINGERPRINT_SALT /
+  SESSION_SECRET-derived) — deterministic for clustering, not reversible;
+  device signals purge after 90 days; raw IPs never persisted by new code.
+
+**Tests**: 180 pass (was 161) — new `tests/risk-boards.test.ts` (risk bands,
+pending top-3/hidden/verified, mid-board fast path, HIGH-risk pending,
+confirmed-fraud unranked, removal + rank recompute, stale auto-release, UPI
+constraint, cooling caps, payout gating incl. the happy path, HMAC
+fingerprint/IP properties).
+
+### Changed
+- daily/board queries exclude pending + removed entries; admin console gains
+  the BOARDS tab (6 tabs); docs updated (ADR-025, anti-cheat layer table,
+  threat-model status, help payout FAQ). Known gap: account deletion deferred
+  (payout records must outlive accounts — documented).
+
 ## [0.9.0] — 2026-11-13
 
 ### Security — hardening program phase 3 (signed run sessions + heartbeat hardening + score plausibility)

@@ -68,7 +68,7 @@ async function mkRun(userId: string, game: string, startedAgoSec: number, seed: 
 }
 
 describe('recordScore — ranked requires a valid run token', () => {
-  it('ranks a submission backed by an open run session', async () => {
+  it('ranks a submission backed by an open run session (top-3 go pending)', async () => {
     const uid = await mkUser('ranked@test')
     const token = await mkRun(uid, 'arena', 120)
     const res = await recordScore(
@@ -77,8 +77,10 @@ describe('recordScore — ranked requires a valid run token', () => {
     )
     expect(res.kind).toBe('ok')
     if (res.kind === 'ok') {
+      // first entry on an empty board = top-1 -> pending verification (phase 4)
       expect(res.ranked).toBe(true)
-      expect(res.rank).toBe(1)
+      expect(res.pending).toBe(true)
+      expect(res.rank).toBe(0)
     }
   })
 

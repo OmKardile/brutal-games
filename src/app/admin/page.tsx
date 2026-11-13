@@ -4,6 +4,7 @@
 // /api/admin/* routes which re-check the ADMIN role server-side.
 
 import { useCallback, useEffect, useState } from 'react'
+import { useToast } from '@/hooks/use-toast'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,6 +21,7 @@ import {
   Search,
   Settings,
   ShieldAlert,
+  Trophy,
   Users,
   Wallet,
 } from 'lucide-react'
@@ -173,11 +175,12 @@ export default function AdminPage() {
         </div>
 
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="grid h-auto w-full grid-cols-5 gap-1 rounded border border-stone-800/80 bg-black/60 p-1">
+          <TabsList className="grid h-auto w-full grid-cols-6 gap-1 rounded border border-stone-800/80 bg-black/60 p-1">
             {[
               { v: 'pool', icon: Coins, label: 'POOL' },
               { v: 'payouts', icon: Wallet, label: 'PAYOUTS' },
               { v: 'flags', icon: Flag, label: 'FLAGS' },
+              { v: 'boards', icon: Trophy, label: 'BOARDS' },
               { v: 'users', icon: Users, label: 'USERS' },
               { v: 'settings', icon: Settings, label: 'SETTINGS' },
             ].map((t) => (
@@ -193,6 +196,7 @@ export default function AdminPage() {
           <TabsContent value="pool"><PoolTab /></TabsContent>
           <TabsContent value="payouts"><PayoutsTab /></TabsContent>
           <TabsContent value="flags"><FlagsTab /></TabsContent>
+          <TabsContent value="boards"><BoardsTab /></TabsContent>
           <TabsContent value="users"><UsersTab /></TabsContent>
           <TabsContent value="settings"><SettingsTab /></TabsContent>
         </Tabs>
@@ -677,6 +681,140 @@ function FlagsTab() {
           </table>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------- boards
+
+interface BoardEntry {
+  id: string
+  game: string
+  name: string
+  score: number
+  wave?: number
+  ranked: boolean
+  pending: boolean
+  createdAt: string
+  user?: { id: string; email: string; name: string | null; status: string } | null
+  removedAt?: string | null
+  removedReason?: string | null
+}
+
+function BoardsTab() {
+  const { toast } = useToast()
+  const [pending, setPending] = useState<{ global: BoardEntry[]; daily: BoardEntry[] }>({ global: [], daily: [] })
+  const [removed, setRemoved] = useState<{ global: BoardEntry[]; daily: BoardEntry[] }>({ global: [], daily: [] })
+  const [busy, setBusy] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/boards', { cache: 'no-store' })
+      if (res.ok) {
+        const d = (await res.json()) as {
+          pendingGlobal: BoardEntry[]
+          pendingDaily: BoardEntry[]
+          removedGlobal: BoardEntry[]
+          removedDaily: BoardEntry[]
+        }
+        setPending({ global: d.pendingGlobal, daily: d.pendingDaily })
+        setRemoved({ global: d.removedGlobal, daily: d.removedDaily })
+      }
+    } catch {
+      // keep stale
+    }
+  }, [])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  const act = async (action: 'verify' | 'remove' | 'restore', board: 'global' | 'daily', id: string, reason?: string) => {
+    setBusy(id)
+    try {
+      const res = await fetch('/api/admin/boards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, board, id, ...(action === 'remove' && reason ? { reason } : {}) }),
+      })
+      if (res.ok) {
+        toast({ title: action.toUpperCase(), description: board === 'global' ? 'Global board entry updated.' : 'Daily entry updated.' })
+        await load()
+      }
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const renderList = (title: string, entries: BoardEntry[], board: 'global' | 'daily', mode: 'pending' | 'removed') => (
+    <div className="rounded border border-stone-800/80 bg-black/60 p-4">
+      <div className="mb-2 flex items-center gap-1.5 text-[10px] tracking-widest text-stone-500">
+        <Trophy className="h-3.5 w-3.5" /> {title}
+      </div>
+      {entries.length === 0 && (
+        <p className="py-2 text-[10px] tracking-widest text-stone-600">EMPTY</p>
+      )}
+      <div className="max-h-72 overflow-y-auto">
+        {entries.map((e) => (
+          <div key={e.id} className="flex items-center gap-2 border-b border-stone-900 py-1.5 last:border-0">
+            <span className="w-14 shrink-0 text-[9px] tracking-widest text-stone-600">{e.game}</span>
+            <span className="w-24 shrink-0 truncate text-[11px] font-bold text-stone-200">{e.name}</span>
+            <span className="w-16 shrink-0 text-right text-[11px] font-black text-amber-400">
+              {e.score.toLocaleString()}
+            </span>
+            <span className="hidden flex-1 truncate text-[9px] tracking-wide text-stone-600 sm:block">
+              {e.user?.email ?? 'guest'} · {fmtDate(e.createdAt)}
+              {mode === 'removed' && e.removedReason ? ` · ${e.removedReason}` : ''}
+            </span>
+            {mode === 'pending' ? (
+              <span className="flex shrink-0 gap-1">
+                <Button
+                  size="sm"
+                  disabled={busy === e.id}
+                  onClick={() => void act('verify', board, e.id)}
+                  className="h-7 border border-emerald-800/60 bg-emerald-900/40 px-2 text-[9px] font-bold tracking-widest text-emerald-300 hover:bg-emerald-900/70"
+                >
+                  VERIFY
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={busy === e.id}
+                  onClick={() => {
+                    const reason = window.prompt('Removal reason (kept in the audit trail):')
+                    if (reason && reason.trim().length >= 3) void act('remove', board, e.id, reason.trim())
+                  }}
+                  className="h-7 border border-red-900/60 bg-red-950/40 px-2 text-[9px] font-bold tracking-widest text-red-400 hover:bg-red-950/70"
+                >
+                  REMOVE
+                </Button>
+              </span>
+            ) : (
+              <Button
+                size="sm"
+                disabled={busy === e.id}
+                onClick={() => void act('restore', board, e.id)}
+                className="h-7 border border-stone-700 bg-transparent px-2 text-[9px] font-bold tracking-widest text-stone-300 hover:border-stone-500"
+              >
+                RESTORE
+              </Button>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+
+  return (
+    <div className="mt-3 grid gap-3 md:grid-cols-2">
+      {renderList('PENDING VERIFICATION — GLOBAL', pending.global, 'global', 'pending')}
+      {renderList('PENDING VERIFICATION — DAILY', pending.daily, 'daily', 'pending')}
+      {renderList('REMOVED (AUDIT) — GLOBAL', removed.global, 'global', 'removed')}
+      {renderList('REMOVED (AUDIT) — DAILY', removed.daily, 'daily', 'removed')}
+      <p className="col-span-full text-[9px] leading-relaxed tracking-widest text-stone-600">
+        TOP-3 AND HIGH-RISK ENTRIES LAND HERE BEFORE THEY GO PUBLIC. REMOVED ENTRIES STAY IN
+        THE DATABASE FOR AUDIT AND NEVER RENDER; RANKS RECOMPUTE AUTOMATICALLY. HONEST
+        PLAYERS' PENDING ENTRIES AUTO-RELEASE AFTER 24H.
+      </p>
     </div>
   )
 }

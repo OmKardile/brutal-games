@@ -129,7 +129,7 @@ function parseBeatLog(raw: string | null): BeatSample[] {
 export async function processHeartbeat(
   userId: string,
   settings: RewardSettings,
-  user: { id: string; status: string; adultDeclaredAt: Date | null },
+  user: { id: string; status: string; adultDeclaredAt: Date | null; createdAt: Date },
   payload: { token: string; visible: boolean; inputEvents: number; frames?: number; challengeResponse: string },
   now: Date = new Date(),
   dbx: PrismaClient | DB = defaultDb,

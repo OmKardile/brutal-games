@@ -3,7 +3,14 @@ import { z } from 'zod'
 import { authUser } from '@/lib/auth/guard'
 import { csrfBlocked } from '@/lib/http'
 import { limit, tooMany } from '@/lib/rate-limit'
-import { recordScore, boardTotals, rankedBoard, GAMES, type Game } from '@/lib/scores/service'
+import {
+  recordScore,
+  boardTotals,
+  rankedBoard,
+  releaseStalePending,
+  GAMES,
+  type Game,
+} from '@/lib/scores/service'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,6 +34,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unknown game' }, { status: 400 })
   }
   try {
+    // opportunistic maintenance: release stale pending entries (LOW-risk
+    // authors, >24h) so honest top scores don't wait on the admin forever
+    void releaseStalePending().catch(() => undefined)
     const [scores, totals] = await Promise.all([rankedBoard(game), boardTotals(game)])
     return NextResponse.json({ scores, totals })
   } catch (err) {
@@ -85,6 +95,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       created: result.entry,
       ranked: result.ranked,
+      pending: result.pending,
       rank: result.rank || null,
       scores: result.board,
     })

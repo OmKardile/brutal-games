@@ -23,21 +23,21 @@ input events and drives the heartbeat API. No engine API changes.
 
 | Model | Role |
 |---|---|
-| `User` | identity: argon2id hash (legacy scrypt verifiable), role PLAYER/ADMIN, status ACTIVE/FROZEN, `emailVerified`, `adultDeclaredAt` (18+), `upiId`, `nameKey` (case-insensitive unique callsign key) |
+| `User` | identity: argon2id hash (legacy scrypt verifiable), role PLAYER/ADMIN, status ACTIVE/FROZEN, `emailVerified`, `adultDeclaredAt` (18+), `upiId` + `upiKey` (unique normalized UPI), `nameKey` (case-insensitive unique callsign key) |
 | `Session` | cookie token (random) → sha256 hash, 30-day sliding expiry |
 | `EmailToken` | one-time verify (72h) / reset (1h) tokens, hashed |
 | `RateLimitBucket` | persistent rate-limit + lockout state: sliding-window hit array (JSON), consecutive-failure counter, `lockedUntil` (login backoff). Survives restarts |
 | `PointEvent` | append-only ledger. `points` ±, `reason`, unique `idempotencyKey`, `reversalOfId` (unique → one reversal per original) |
 | `DailyActivity` | per-user-per-IST-day rollup; enforces `DAILY_POINT_CAP`; streak marker |
 | `PlaySession` | run session (0.8: ALL runs, not just rewards): HMAC-SIGNED token (uid/game/seed/nonce/server startedAt/kid — src/lib/run-token.ts; only sha256(token) stored), heartbeat hash-chain `challenge`, per-beat activity `beatLog` (input+frames, last 48), `scoreClaimedAt` (single-use ranked-score claim), `seed` binding for dailies |
-| `HighScore` | global board entry; `userId` + `ranked` (false = display-only, excluded from the competitive board) since 0.8 |
+| `HighScore` | global board entry; `userId`/`ranked` (0.8) + `pending` verification + soft-removal audit columns (0.9.1) |
 | `MonthlyPool` | month (IST), net revenue (paise), share %, status DRAFT→LOCKED, `leftoverMinor`, `voidedMinor` |
 | `PoolDistribution` | immutable per-user snapshot at lock: points, raw share, capped share |
 | `PayoutRequest` | PENDING→APPROVED→PAID/REJECTED, `holdUntil` snapshot, transaction ref |
 | `FraudFlag` | flag-only signals → manual review queue |
 | `DeviceFingerprint` | hashed device signals + last IP, per user |
 | `RewardSetting` | key→JSON overrides of code defaults (admin editable) |
-| `DailyRun` / `DailyStreak` / `PortalSetting` | daily challenges: per-day runs (seed-checked, size-capped input log), streaks, portal config |
+| `DailyRun` / `DailyStreak` / `PortalSetting` | daily challenges: per-day runs (seed-checked, size-capped input log, pending/removal moderation since 0.9.1), streaks, portal config |
 
 Money is int paise everywhere. Reward days/months are Asia/Kolkata (IST) —
 `src/lib/rewards/ist.ts` converts to UTC ranges for queries.
@@ -95,8 +95,9 @@ behind a reverse proxy; headers ignored otherwise).
   disclosure contact) and **[docs/anti-cheat.md](docs/anti-cheat.md)** (layer
   architecture + ops runbook). Phases 1-3 shipped (0.7.1/0.8.0/0.9.0):
   auth/API-baseline/CSRF/persistent-RL/scores lock-down + signed run tokens +
-  heartbeat hash-chain + plausibility/statistics. Rewards stay disabled until
-  phases 2-6 + 8 pass.
+  heartbeat hash-chain + plausibility/statistics + risk scoring with
+  pending-verification boards, payout gating and privacy hashing (0.9.1).
+  Rewards stay disabled until phases 2-6 + 8 pass.
 - Passwords: argon2id via `Bun.password` (legacy scrypt verifiable + rehash-on-
   login), min length 10, no composition rules; optional HIBP breached-password
   rejection (`HIBP_CHECK=1`, k-anonymity, fails open). Login has per-account +
@@ -118,6 +119,13 @@ behind a reverse proxy; headers ignored otherwise).
   Freezing/voiding is always a human action.
 - Board names: account callsigns only — policy sanitization, reserved names
   (leet-aware), blocklist (`NAME_BLOCKLIST` env), case-insensitive uniqueness.
+- Anti-cheat (0.9.1): explainable risk score (LOW/MEDIUM/HIGH; HIGH = auto-
+  HOLD — pending entries + payout block, never a ban); top-3 and HIGH-risk
+  entries pending verification (24h auto-release for LOW-risk; admin
+  BOARDS moderation tab; confirmed-fraud users never rank); payout gating
+  (72h account age + 3 active days + risk hold; 48h halved-cap cooling);
+  unique UPI destination per account; HMAC-salted fingerprints/IPs with a
+  90-day purge.
 - Anti-cheat (0.9): run tokens are HMAC-signed with key-id rotation
   (`RUN_TOKEN_KEYS`); verification is offline (before any DB access); ranked
   dailies must bind the exact server seed; ranked scores are statistically
@@ -131,7 +139,7 @@ behind a reverse proxy; headers ignored otherwise).
 
 ## Testing
 
-`bun test tests/` — 161 tests. `payout-math.test.ts` (pure edge cases: zero revenue,
+`bun test tests/` — 180 tests. `payout-math.test.ts` (pure edge cases: zero revenue,
 zero points, caps, rounding residue, thresholds), `ledger.test.ts` (real temp SQLite DB:
 idempotency, daily-cap clamps, streaks, reversal semantics, month clamping, gates),
 `rewards-logic.test.ts` (heartbeat timing, run plausibility, IST boundaries, IP/CIDR
@@ -140,7 +148,7 @@ matching, fingerprint stability, challenge determinism), `auth-hardening.test.ts
 backoff math), `rate-limit.test.ts` (persistent sliding window, restart persistence,
 lockout state machine), `scores-service.test.ts` (ranked-with-token, replay burn,
 foreign/mismatched/aborted tokens, implausible scores, callsign claims,
-ranked-only boards), `anti-cheat.test.ts` (token signing/rotation/tamper, heartbeat challenge chain + replay/forgery, entropy/drift, daily seed claims, statistical classification).
+ranked-only boards), `anti-cheat.test.ts` (token signing/rotation/tamper, heartbeat challenge chain + replay/forgery, entropy/drift, daily seed claims, statistical classification), `risk-boards.test.ts` (risk bands, pending/moderation flows, cooling, payout gating, UPI constraint, HMAC privacy).
 
 ## Operations
 

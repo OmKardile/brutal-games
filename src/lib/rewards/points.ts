@@ -37,8 +37,21 @@ export type AwardResult =
 
 export interface AwardContext {
   settings: RewardSettings
-  user: Pick<User, 'id' | 'status' | 'adultDeclaredAt'>
+  user: Pick<User, 'id' | 'status' | 'adultDeclaredAt' | 'createdAt'>
   now?: Date
+}
+
+/** New-account cooling (phase 4): younger accounts earn against a halved cap. */
+export const COOLING_HOURS = 48
+export const COOLING_CAP_FACTOR = 0.5
+
+function effectiveDailyCap(ctx: AwardContext): number {
+  const now = ctx.now ?? new Date()
+  const ageHours = (now.getTime() - ctx.user.createdAt.getTime()) / 3600_000
+  if (ageHours < COOLING_HOURS) {
+    return Math.floor(ctx.settings.DAILY_POINT_CAP * COOLING_CAP_FACTOR)
+  }
+  return ctx.settings.DAILY_POINT_CAP
 }
 
 /** Pure: how many points fit under the daily cap. */
@@ -101,7 +114,7 @@ export async function awardPoints(
     create: { userId: input.userId, date: dateKey },
   })
 
-  const fits = clampByDailyCap(activity.pointsEarned, input.points, ctx.settings.DAILY_POINT_CAP)
+  const fits = clampByDailyCap(activity.pointsEarned, input.points, effectiveDailyCap(ctx))
   if (fits <= 0) return { kind: 'daily_cap', points: 0 }
 
   const event = await dbx.pointEvent.create({

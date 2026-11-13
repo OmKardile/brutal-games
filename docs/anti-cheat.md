@@ -19,8 +19,8 @@ engines are deterministic; we do not fake it.
 | B — Heartbeat integrity | Hash-chain challenge echo, server-clock beats, input/frame activity signals | **Live (0.9)** |
 | C — Plausibility + statistics | manifest ceilings vs server duration; z-score vs own history + population | **Live (0.9)** |
 | D — Replay verification | headless re-simulation of input logs | **Deferred** (engines non-deterministic; unlock = engine migration) |
-| E — Account/device integrity | fingerprints, IP signals, UPI clustering, cooling | Phase 4 |
-| F — Risk scoring + holds | explainable score, auto-HOLD, appeal | Phase 4 |
+| E — Account/device integrity | HMAC fingerprints + hashed IPs (90-day purge), UPI destination uniqueness, 48h cooling | **Live (0.9.1)** |
+| F — Risk scoring + holds | explainable score (LOW/MEDIUM/HIGH), pending verification, auto-HOLD, appeal | **Live (0.9.1)** |
 
 ## Layer A — signed run sessions (src/lib/run-token.ts, rewards/heartbeat.ts)
 
@@ -82,18 +82,39 @@ derived from `SESSION_SECRET` (kid `ss-v1`) — fine for dev/single-key deploys.
   plausible scores. They stay ranked and flagged; humans decide (phase 4 adds
   "pending verification" for top-N and a removal path).
 
+## Layers E/F — risk scoring, holds, board integrity (src/lib/risk.ts, phase 4)
+
+- **Score**: flags weigh LOW=3 / MEDIUM=10 / HIGH=25 per type (confirmed ×2,
+  dismissed 0). Bands: 0-14 LOW, 15-39 MEDIUM (review queue), 40+ HIGH.
+- **HIGH = auto-HOLD**: new ranked entries store `pending` (hidden from
+  boards/totals until verified) and payout requests are blocked (RISK_HOLD).
+  NEVER a ban; the appeal path is the flags queue + contact. Additionally,
+  any entry that would enter a board's top-3 goes pending regardless of risk
+  (cheap insurance on the most visible slots), auto-releasing after 24h for
+  LOW-risk authors.
+- **Moderation**: removed entries stay for audit (removedAt/By/Reason) and
+  never render; ranks recompute on read; restore is one click (admin BOARDS
+  tab). CONFIRMED-fraud users can never rank again (display-only).
+- **Payout gating**: 72h account age + 3 distinct active days + non-HIGH risk
+  before the first payout; <48h accounts earn at half cap (cooling); one UPI
+  destination per account (upiKey unique, reuse flagged).
+- **Privacy**: fingerprints and IPs stored as keyed HMACs (FINGERPRINT_SALT
+  or SESSION_SECRET-derived) — deterministic for clustering, not reversible;
+  device signals purge after 90 days.
+
 ## What each attack meets (mapping to threat model §5)
 
 | Attack | Layers hit |
 |---|---|
 | `curl` a fake score (T1) | auth required → 401 |
+| Poisoning a top-3 slot (T2/T3) | pending verification + moderation + callsign policy |
 | Logged-in forged score, no token (T1) | display-only, off the ranked board |
 | Replayed/intercepted token (T6) | HMAC verify + single-use claim |
 | Token for another game/seed (T2) | payload binding (GAME/SEED mismatch) |
 | Impossible score for real time (T1/T2) | manifest ceiling vs signed startedAt |
 | Scripted heartbeat farm (T4) | challenge chain + interval rules + entropy/drift flags + caps |
 | Speed-hacked engine (T2) | frame-drift flag (review), plausibility ceiling |
-| Multi-account farm (T5) | device/IP flags (today) → clustering + cooling + payout gates (phases 4-5) |
+| Multi-account farm (T5) | device/IP hash clustering + UPI uniqueness + 72h/3-day payout gates + 48h cooling + risk HOLD |
 | Deterministic replay forgery (T2) | NOT covered — Layer D deferred (documented gap) |
 
 ## Operations runbook

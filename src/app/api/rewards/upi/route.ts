@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { authUser } from '@/lib/auth/guard'
+import { flagUpiReuse } from '@/lib/rewards/fraud'
 import { csrfBlocked } from '@/lib/http'
 import { limit, tooMany } from '@/lib/rate-limit'
 
@@ -31,9 +32,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'UPI ID must look like name@bank.' }, { status: 400 })
   }
 
+  // normalized UPI key: one payout destination per account AND one account
+  // per destination (multi-account pooling to one UPI is the payout-fraud
+  // pattern — blocked + flagged for review)
+  const upiKey = upiId.toLowerCase()
+  const existing = await db.user.findFirst({
+    where: { upiKey, id: { not: user.id } },
+    select: { id: true },
+  })
+  if (existing) {
+    await flagUpiReuse(user.id, upiKey, existing.id).catch(() => undefined)
+    return NextResponse.json(
+      { error: 'This UPI ID is already linked to another account.' },
+      { status: 409 },
+    )
+  }
+
   await db.user.update({
     where: { id: user.id },
-    data: { upiId, upiUpdatedAt: new Date() },
+    data: { upiId, upiKey, upiUpdatedAt: new Date() },
   })
   return NextResponse.json({ ok: true, upiId })
 }

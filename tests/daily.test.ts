@@ -168,6 +168,13 @@ beforeAll(() => {
   )
   if (push.status !== 0) throw new Error('prisma db push failed: ' + push.stdout + push.stderr)
   db = new PrismaClient({ datasources: { db: { url: `file:${DB_PATH}` } } })
+  // DailyRun.user is a real FK since 0.9.1 — create the referenced users
+  void db.user.createMany({
+    data: [
+      { id: 'u1', email: 'u1@t.test', passwordHash: 'x' },
+      { id: 'u2', email: 'u2@t.test', passwordHash: 'x' },
+    ],
+  }).catch(() => undefined)
 })
 
 afterAll(async () => {
@@ -181,19 +188,19 @@ describe('daily persistence', () => {
     const day = '2026-11-13'
     await recordDailyRun(db, {
       game: 'stack', dateKey: day, userId: 'u1', name: 'ALPHA',
-      score: 10, durationMs: 20_000, seedUsed: 1, ranked: true, inputLog: null,
+      score: 10, durationMs: 20_000, seedUsed: 1, ranked: true, pending: false, inputLog: null,
     })
     await recordDailyRun(db, {
       game: 'stack', dateKey: day, userId: 'u1', name: 'ALPHA',
-      score: 42, durationMs: 60_000, seedUsed: 1, ranked: true, inputLog: null,
+      score: 42, durationMs: 60_000, seedUsed: 1, ranked: true, pending: false, inputLog: null,
     })
     await recordDailyRun(db, {
       game: 'stack', dateKey: day, userId: 'u1', name: 'ALPHA',
-      score: 7, durationMs: 30_000, seedUsed: 1, ranked: true, inputLog: null,
+      score: 7, durationMs: 30_000, seedUsed: 1, ranked: true, pending: false, inputLog: null,
     })
     await recordDailyRun(db, {
       game: 'stack', dateKey: day, userId: null, name: 'GUEST',
-      score: 20, durationMs: 60_000, seedUsed: 1, ranked: true, inputLog: null,
+      score: 20, durationMs: 60_000, seedUsed: 1, ranked: true, pending: false, inputLog: null,
     })
     const board = await dailyBoard(db, { game: 'stack', dateKey: day, viewerId: 'u1' })
     expect(board.length).toBe(2) // one entry per player
@@ -205,7 +212,7 @@ describe('daily persistence', () => {
     const day = '2026-11-13'
     await recordDailyRun(db, {
       game: 'stack', dateKey: day, userId: null, name: 'GUEST',
-      score: 30, durationMs: 60_000, seedUsed: 1, ranked: true, inputLog: null,
+      score: 30, durationMs: 60_000, seedUsed: 1, ranked: true, pending: false, inputLog: null,
     })
     const board = await dailyBoard(db, { game: 'stack', dateKey: day })
     expect(board.find((e) => e.name === 'GUEST')?.score).toBe(30) // best of 20/30
@@ -220,7 +227,7 @@ describe('daily persistence', () => {
     for (const [name, score] of [['A', 100], ['B', 80], ['C', 60]] as const) {
       await recordDailyRun(db, {
         game: 'reflex', dateKey: day, userId: null, name,
-        score, durationMs: 30_000, seedUsed: 1, ranked: true, inputLog: null,
+        score, durationMs: 30_000, seedUsed: 1, ranked: true, pending: false, inputLog: null,
       })
     }
     expect(await dailyRank(db, { game: 'reflex', dateKey: day, score: 90 })).toBe(2)
@@ -232,11 +239,11 @@ describe('daily persistence', () => {
     const day = '2026-11-15'
     await recordDailyRun(db, {
       game: 'dodge', dateKey: day, userId: 'u2', name: 'BETA',
-      score: 5, durationMs: 10_000, seedUsed: 1, ranked: true, inputLog: null,
+      score: 5, durationMs: 10_000, seedUsed: 1, ranked: true, pending: false, inputLog: null,
     })
     await recordDailyRun(db, {
       game: 'dodge', dateKey: day, userId: 'u2', name: 'BETA',
-      score: 9, durationMs: 20_000, seedUsed: 1, ranked: true, inputLog: null,
+      score: 9, durationMs: 20_000, seedUsed: 1, ranked: true, pending: false, inputLog: null,
     })
     expect(await dailyBest(db, { game: 'dodge', dateKey: day, userId: 'u2' })).toBe(9)
     expect(await dailyBest(db, { game: 'dodge', dateKey: day, userId: 'nobody' })).toBeNull()

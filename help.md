@@ -33,9 +33,17 @@ is an **estimate, not guaranteed**. If revenue is zero, payouts are zero.
 **How do I get paid?**
 In `/rewards`: verify your email, add your UPI ID, and request a payout once your
 credited balance is at least the minimum (default ₹100; smaller balances carry over).
-Requests are held for a review period (default 14 days), then an admin approves and
-pays manually to your UPI. You'll see the status (PENDING → APPROVED → PAID) in the
-payout history.
+First payouts also require the account to be at least 3 days old with play on 3
+different days (anti-farming rules), and each UPI ID can only be linked to one
+account. Requests are held for a review period (default 14 days), then an admin
+approves and pays manually to your UPI. You'll see the status (PENDING → APPROVED →
+PAID) in the payout history.
+
+**Why is my score "pending verification"?**
+New top scores (top-3 territory) and scores from accounts under review are held
+briefly before appearing on the public board — usually released automatically
+within 24h, instantly once an admin verifies. Nothing is deleted automatically;
+if a run of yours was removed by mistake, contact us and it gets restored.
 
 **How do I secure my account?**
 Use a password of at least 10 characters that you don't reuse. You can see every

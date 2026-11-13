@@ -140,7 +140,7 @@ describe('heartbeat — hash-chain challenge', () => {
     const r = await processHeartbeat(
       uid,
       s,
-      { id: uid, status: 'ACTIVE', adultDeclaredAt: new Date() },
+      { id: uid, status: 'ACTIVE', adultDeclaredAt: new Date(), createdAt: new Date(Date.now() - 96 * 3600_000) },
       {
         token: start.token,
         visible: true,
@@ -161,7 +161,7 @@ describe('heartbeat — hash-chain challenge', () => {
     const s = settings()
     const start = await startPlaySession(uid, 'arena', null, s, 'test', db)
     const now = new Date(Date.now() + 31_000)
-    const user = { id: uid, status: 'ACTIVE', adultDeclaredAt: new Date() }
+    const user = { id: uid, status: 'ACTIVE', adultDeclaredAt: new Date(), createdAt: new Date(Date.now() - 96 * 3600_000) }
     const wrong = await processHeartbeat(uid, s, user, {
       token: start.token,
       visible: true,
@@ -190,7 +190,7 @@ describe('heartbeat — hash-chain challenge', () => {
     const uid = await mkUser('chain-forged@test')
     const forged = signRunToken({ uid, game: 'arena', seed: null, startedAt: Date.now() })
       .split('.')[0] + '.0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
-    const r = await processHeartbeat(uid, settings(), { id: uid, status: 'ACTIVE', adultDeclaredAt: new Date() }, {
+    const r = await processHeartbeat(uid, settings(), { id: uid, status: 'ACTIVE', adultDeclaredAt: new Date(), createdAt: new Date(Date.now() - 96 * 3600_000) }, {
       token: forged,
       visible: true,
       inputEvents: 1,

@@ -38,7 +38,7 @@ const settings = (): RewardSettings => ({
 function ctx(userId: string, now?: Date, overrides?: Partial<RewardSettings>): AwardContext {
   return {
     settings: { ...settings(), ...overrides },
-    user: { id: userId, status: 'ACTIVE', adultDeclaredAt: new Date() },
+    user: { id: userId, status: 'ACTIVE', adultDeclaredAt: new Date(), createdAt: new Date(Date.now() - 96 * 3600_000) },
     ...(now ? { now } : {}),
   }
 }
@@ -47,7 +47,7 @@ function ctx(userId: string, now?: Date, overrides?: Partial<RewardSettings>): A
 async function realCtx(userId: string): Promise<AwardContext> {
   const u = await db.user.findUniqueOrThrow({
     where: { id: userId },
-    select: { id: true, status: true, adultDeclaredAt: true },
+    select: { id: true, status: true, adultDeclaredAt: true, createdAt: true },
   })
   return { settings: settings(), user: u }
 }

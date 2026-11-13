@@ -325,3 +325,41 @@ caps + ceilings — documented in docs/anti-cheat.md). The heartbeat API is
 breaking for old cached clients (challenge required) — they stop earning
 until reload, acceptable. PlaySession gains seed/challenge/beatLog columns.
 docs/anti-cheat.md is the architecture + operations companion.
+
+## ADR-025 — Risk scoring, board integrity, UPI uniqueness, cooling (phase 4)
+
+Date: 2026-11-13 · Status: accepted (phase 4)
+
+**Context.** Phase 3 left fraud signals as an unweighted flag pile, boards
+without a moderation/pending path (M3/M4), payout gating without account-age
+or activity rules (M6), and device/IP signals stored privacy-raw (M1).
+
+**Decision.**
+1. **Explainable risk score** (`src/lib/risk.ts`): OPEN/REVIEWING flags score
+   LOW=3 / MEDIUM=10 / HIGH=25 points per type (confirmed ×2, dismissed = 0);
+   bands 0-14 LOW, 15-39 MEDIUM (review queue), 40+ HIGH = auto-HOLD: new
+   ranked entries go pending-verification and payout requests are blocked
+   pending review — never a ban, appeal via the flags queue.
+2. **Board integrity**: entries that would enter a board's top-3, and all
+   ranked entries from HIGH-risk users, are stored `pending` and hidden until
+   an admin verifies (BOARDS tab) — pending entries from LOW-risk users
+   auto-release after 24h. Moderation = soft removal (removedAt/By/Reason,
+   kept for audit, never rendered); ranks recompute on read. Users with a
+   CONFIRMED fraud flag can never rank again (display-only).
+3. **Payout gating (M6)**: first payout requires account age ≥72h AND ≥3
+   distinct active days AND non-HIGH risk. New accounts (<48h) earn against a
+   halved daily cap (cooling).
+4. **UPI destination uniqueness**: `User.upiKey` (normalized, unique) — one
+   account per payout destination; reuse is blocked (409) and flagged
+   (UPI_REUSE) for review.
+5. **Privacy (M1)**: fingerprints and IPs are stored as keyed HMACs
+   (FINGERPRINT_SALT / SESSION_SECRET-derived) — deterministic for clustering,
+   not reversible; device signals purge after 90 days (opportunistic sweep);
+   VPN/CIDR matching still happens on the raw IP in-flight.
+
+**Consequences.** Farmed accounts are structurally slower to pay out and
+cheaper to catch; honest players can hit a pending-verification wait (≤24h
+auto-release, or instant admin verify) — the accepted false-positive cost.
+DailyRun/HighScore gain pending/removal columns and a User FK (referential
+integrity). Account deletion (GDPR-style) stays deferred: payout records must
+outlive accounts for money audit (documented in the runbook, phase 6).

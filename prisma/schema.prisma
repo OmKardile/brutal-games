@@ -25,11 +25,18 @@ model HighScore {
   // which game the run belongs to: arena | stack | reflex | dodge | merge
   game      String   @default("arena")
   userId    String? // set for authenticated submissions (0.8+)
+  user      User?    @relation(fields: [userId], references: [id])
   ranked    Boolean  @default(true) // false = display-only (no valid run token)
+  pending   Boolean  @default(false) // 0.9.1: awaiting verification (top scores / high risk)
+  removedAt DateTime? // moderation: removed entries stay (audit) but never render
+  removedBy String?
+  removedReason String?
   createdAt DateTime @default(now())
 
   @@index([score])
   @@index([game, ranked, score])
+  @@index([game, ranked, pending, score])
+  @@index([pending, createdAt])
 }
 
 // ------------------------------------------------------------------ identity
@@ -45,6 +52,7 @@ model User {
   status          String    @default("ACTIVE") // ACTIVE | FROZEN
   adultDeclaredAt DateTime? // 18+ declaration; null = cannot earn or request payouts
   upiId           String? // format-validated UPI id
+  upiKey          String?   @unique // normalized UPI — one account per payout destination
   upiUpdatedAt    DateTime?
   lastLoginAt     DateTime?
   createdAt       DateTime  @default(now())
@@ -59,6 +67,8 @@ model User {
   fraudFlags      FraudFlag[]
   devices         DeviceFingerprint[]
   distributions   PoolDistribution[]
+  highScores      HighScore[]
+  dailyRuns       DailyRun[]
 }
 
 // Lightweight own-session approach (no next-auth) — see decisions.md.
@@ -307,16 +317,22 @@ model DailyRun {
   game       String // slug: arena | stack | reflex | dodge | merge
   dateKey    String // 'YYYY-MM-DD' in the configured day-boundary timezone
   userId     String? // signed-in player, null for guests
+  user       User?    @relation(fields: [userId], references: [id])
   name       String // display callsign (max 16)
   score      Int
   durationMs Int
   seedUsed   Int // seed the client reports it played with (audit trail)
   ranked     Boolean  @default(true)
+  pending    Boolean  @default(false) // 0.9.1: awaiting verification
+  removedAt  DateTime? // moderation: removed entries never render
+  removedBy  String?
+  removedReason String?
   inputLog   String? // size-capped compressed input log — stored, NOT verified in v1
   createdAt  DateTime @default(now())
 
   @@index([game, dateKey, score])
   @@index([userId, dateKey])
+  @@index([pending, createdAt])
 }
 
 // Consecutive-day streak of "at least one completed daily run" (any game).

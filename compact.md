@@ -104,11 +104,18 @@ NEXT_PUBLIC_ANALYTICS_ENDPOINT/SITE (optional), NEXT_PUBLIC_CONSENT_BANNER
   boards fall back to localStorage; daily runs → local UNRANKED. For correct
   absolute sitemap/canonicals set APP_URL to the Pages origin.
 
-## Security program (v0.9.0, active directive)
+## Security program (v0.9.1, active directive)
 - **docs/threat-model.md** is the contract; **docs/anti-cheat.md** is the
   layer architecture + ops runbook; SECURITY.md = operations.
   Phase 1 (audit) DONE. **Phase 2 DONE (v0.8.0)** — ADR-021/022/023.
-  **Phase 3 DONE (v0.9.0)** — ADR-024.
+  **Phase 3 DONE (v0.9.0)** — ADR-024. **Phase 4 DONE (v0.9.1)** — ADR-025.
+- Phase 4 shipped: explainable risk score (3/10/25 per flag type, confirmed
+  x2; bands 15=MEDIUM review, 40=HIGH auto-HOLD — pending entries + payout
+  block, never bans); top-3 + HIGH-risk entries pending verification (admin
+  BOARDS tab verify/remove/restore; 24h auto-release for LOW-risk; confirmed
+  fraud = never ranks again); payout gating (72h age + 3 active days +
+  non-HIGH risk; 48h halved-cap cooling; unique upiKey per account +
+  UPI_REUSE flag); privacy (HMAC fingerprints + hashed IPs, 90-day purge).
 - Phase 3 shipped: HMAC-signed run tokens (userId/game/seed/nonce/server
   startedAt/kid; offline verify before DB; key-id rotation via RUN_TOKEN_KEYS,
   fallback derived from SESSION_SECRET; 6h stale window; duration from the
@@ -127,17 +134,16 @@ NEXT_PUBLIC_ANALYTICS_ENDPOINT/SITE (optional), NEXT_PUBLIC_CONSENT_BANNER
   (nameKey unique + policy); /api/auth/sessions + /api/auth/profile; deps
   pruned -21; SECURITY.md.
 - Still open from the audit: H2 headers (phase 6), H5 admin 2FA/audit/self-
-  approval (phase 5), H8 payout races (phase 5), M1 privacy hashing/retention
-  (phase 4), M3/M4 board integrity/moderation + pending verification (phase
-  4), M6 payout gating (phase 4/5), M7 monitoring/runbook (phase 6), M8
-  hygiene (partial: deps done, gitleaks/audit cadence phase 8), M9 payouts
-  kill switch (phase 5), L1 dead /api route (phase 6).
+  approval (phase 5), H8 payout races (phase 5), M7 monitoring/runbook
+  (phase 6), M8 hygiene (partial: deps done, gitleaks/audit cadence phase 8),
+  M9 payouts kill switch (phase 5), L1 dead /api route (phase 6). Account
+  deletion deferred (payout records must outlive accounts — phase 6 docs).
 - Caddyfile ships a dev-only `?XTransformPort=` open local-proxy handler —
   must never reach production (phase 6 ships a hardened template).
 - Next phases (each: docs+CHANGELOG+tests, then WAIT FOR OK):
-  4 risk score/leaderboard integrity/device signals → 5 payout integrity/admin
-  2FA+audit/kill switch → 6 headers/Caddy/backups/monitoring/runbook →
-  7 replay (deferred) → 8 abuse-test suite + scans + red-team.
+  5 payout integrity/admin 2FA+audit/kill switch/reconciliation →
+  6 headers/Caddy/backups/monitoring/runbook → 7 replay (deferred) →
+  8 abuse-test suite + scans + red-team.
 - REWARDS_ENABLED stays FALSE until phases 2-6 + 8 pass (ADR-020).
 - Standing rules: localStorage never carries value; server clock decides
   durations; authz only in route handlers (no middleware exists — keep it);

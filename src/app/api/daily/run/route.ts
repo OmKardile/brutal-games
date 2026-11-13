@@ -14,6 +14,7 @@ import { extendStreak, mergeStreaks, type StreakState } from '@/lib/daily/streak
 import { dailySeedFor, seedMatches } from '@/lib/daily/seed'
 import { dateKeyForTz, previousDateKey } from '@/lib/daily/tz'
 import { claimDailyScoreForSession } from '@/lib/rewards/heartbeat'
+import { userRisk } from '@/lib/risk'
 import { csrfBlocked } from '@/lib/http'
 import { limit, tooMany } from '@/lib/rate-limit'
 import { getSessionUser } from '@/lib/auth/session'
@@ -125,6 +126,14 @@ export async function POST(req: NextRequest) {
 
   const activeUser = preUser && preUser.status === 'ACTIVE' ? preUser : null
 
+  // pending verification (phase 4): ranked runs from HIGH-risk players are
+  // stored pending admin verification; never auto-removed
+  let pending = false
+  if (ranked && activeUser) {
+    const risk = await userRisk(activeUser.id, db)
+    if (risk.level === 'HIGH') pending = true
+  }
+
   // board name: account callsign for signed-in players (uniqueness by
   // nameKey); policy-checked sanitized name for guests (M2 fix)
   let name: string
@@ -159,6 +168,7 @@ export async function POST(req: NextRequest) {
       durationMs: run.durationMs,
       seedUsed: run.seed,
       ranked,
+      pending,
       inputLog,
     })
 

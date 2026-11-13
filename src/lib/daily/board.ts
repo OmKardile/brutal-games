@@ -23,7 +23,7 @@ function playerKey(userId: string | null, name: string): string {
   return userId ? `u:${userId}` : `n:${name.toUpperCase()}`
 }
 
-/** Top N best-per-player rows for a game+day. */
+/** Top N best-per-player rows for a game+day (verified, non-removed only). */
 export async function dailyBoard(
   db: PrismaClient,
   opts: { game: GameSlug; dateKey: string; limit?: number; viewerId?: string | null },
@@ -31,7 +31,7 @@ export async function dailyBoard(
   const limit = opts.limit ?? 10
   // fetch a wide slice ordered by score, then reduce to best-per-player
   const rows = await db.dailyRun.findMany({
-    where: { game: opts.game, dateKey: opts.dateKey },
+    where: { game: opts.game, dateKey: opts.dateKey, pending: false, removedAt: null },
     orderBy: [{ score: 'desc' }, { createdAt: 'asc' }],
     take: 300,
   })
@@ -61,9 +61,10 @@ export async function dailyBest(
   db: PrismaClient,
   opts: { game: GameSlug; dateKey: string; userId?: string | null; name?: string },
 ): Promise<number | null> {
+  const base = { game: opts.game, dateKey: opts.dateKey, pending: false, removedAt: null }
   const where = opts.userId
-    ? { game: opts.game, dateKey: opts.dateKey, userId: opts.userId }
-    : { game: opts.game, dateKey: opts.dateKey, name: opts.name ?? '' }
+    ? { ...base, userId: opts.userId }
+    : { ...base, name: opts.name ?? '' }
   const agg = await db.dailyRun.aggregate({ where, _max: { score: true } })
   return agg._max.score ?? null
 }
@@ -77,6 +78,7 @@ export interface RecordRunInput {
   durationMs: number
   seedUsed: number
   ranked: boolean
+  pending: boolean
   inputLog: string | null
 }
 
@@ -94,19 +96,20 @@ export async function recordDailyRun(db: PrismaClient, run: RecordRunInput): Pro
       // read back with `>>> 0` to recover the unsigned value.
       seedUsed: run.seedUsed | 0,
       ranked: run.ranked,
+      pending: run.pending,
       inputLog: run.inputLog,
     },
   })
   return row.id
 }
 
-/** Rank of a score among best-per-player entries (1-based). */
+/** Rank of a score among best-per-player entries (1-based; verified only). */
 export async function dailyRank(
   db: PrismaClient,
   opts: { game: GameSlug; dateKey: string; score: number },
 ): Promise<number> {
   const rows = await db.dailyRun.findMany({
-    where: { game: opts.game, dateKey: opts.dateKey },
+    where: { game: opts.game, dateKey: opts.dateKey, pending: false, removedAt: null },
     orderBy: [{ score: 'desc' }, { createdAt: 'asc' }],
     take: 300,
     select: { userId: true, name: true, score: true },

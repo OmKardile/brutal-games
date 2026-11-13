@@ -10,6 +10,7 @@ import type { Prisma } from '@prisma/client'
 import type { RewardSettings } from '@/lib/rewards/config'
 import { monthPointsByUser, type DB } from '@/lib/rewards/points'
 import { computeDistribution, type PoolComputation } from '@/lib/rewards/payout-math'
+import { userRisk } from '@/lib/risk'
 
 export interface BalanceInfo {
   creditedMinor: number
@@ -113,10 +114,15 @@ export interface PayoutRequestDeps {
     emailVerified: Date | null
     adultDeclaredAt: Date | null
     upiId: string | null
+    createdAt: Date
   }
   settings: RewardSettings
   amountMinor: number
 }
+
+/** Payout gating constants (phase 4, M6): documented, deliberately not admin-tunable. */
+export const MIN_ACCOUNT_AGE_HOURS = 72
+export const MIN_ACTIVE_DAYS = 3
 
 export async function createPayoutRequest(
   deps: PayoutRequestDeps,
@@ -141,6 +147,35 @@ export async function createPayoutRequest(
       ok: false,
       code: 'BELOW_THRESHOLD',
       message: `Minimum payout is ₹${(settings.MIN_PAYOUT_MINOR / 100).toFixed(0)}. Your balance carries over.`,
+    }
+  }
+  // ---- phase 4 gating (M6): make farmed accounts uneconomical ----------
+  // 1. account age: fresh multi-accounts can't cash out immediately
+  const ageHours = (Date.now() - user.createdAt.getTime()) / 3600_000
+  if (ageHours < MIN_ACCOUNT_AGE_HOURS) {
+    return {
+      ok: false,
+      code: 'ACCOUNT_TOO_NEW',
+      message: `Accounts must be at least ${MIN_ACCOUNT_AGE_HOURS}h old before the first payout.`,
+    }
+  }
+  // 2. distinct active days: real play history, not a burst farm
+  const activeDays = await dbx.dailyActivity.count({ where: { userId: user.id } })
+  if (activeDays < MIN_ACTIVE_DAYS) {
+    return {
+      ok: false,
+      code: 'NEED_ACTIVITY',
+      message: `Play on at least ${MIN_ACTIVE_DAYS} different days before your first payout.`,
+    }
+  }
+  // 3. risk auto-HOLD: HIGH-risk accounts (explainable flag score) wait for
+  //    review — never a ban; the appeal path is the flags queue + contact
+  const risk = await userRisk(user.id, dbx)
+  if (risk.level === 'HIGH') {
+    return {
+      ok: false,
+      code: 'RISK_HOLD',
+      message: 'Your account is under review — payouts are temporarily on hold. Contact support to appeal.',
     }
   }
   const balance = await rewardBalance(user.id, dbx)

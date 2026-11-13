@@ -44,7 +44,7 @@ export function runCompletionPoints(wave: number): number {
 
 export async function awardRunCompletion(
   settings: RewardSettings,
-  user: { id: string; status: string; adultDeclaredAt: Date | null },
+  user: { id: string; status: string; adultDeclaredAt: Date | null; createdAt: Date },
   token: string,
   stats: RunStatsInput,
   dbx: DB = db,
