@@ -2,6 +2,7 @@
 // A fan-made tribute to the BRUTAL game framework (github.com/ahwootech/BRUTAL)
 
 import { Sfx } from './audio'
+import { GamepadReader, type PadSnapshot } from './gamepad'
 import { UPGRADES, defaultStats } from './upgrades'
 import type { GameEvent, GamePhase, PlayerStats, RunStats, UpgradeDef } from './types'
 
@@ -252,10 +253,13 @@ export class BrutalGame {
 
   // input
   private keys = new Set<string>()
-  private mouse = { x: 0, y: 0, down: false, seen: false }
+  private mouse = { x: 0, y: 0, down: false, seen: false, lastT: 0 }
   private touchMove = { active: false, ox: 0, oy: 0, x: 0, y: 0 }
   private touchAim = { active: false, ox: 0, oy: 0, x: 0, y: 0 }
   private isTouch = false
+  // gamepad (polled every frame; snapshot kept for input resolve)
+  private pad = new GamepadReader()
+  private padSnap: PadSnapshot | null = null
 
   constructor(canvas: HTMLCanvasElement, onEvent: (e: GameEvent) => void) {
     this.canvas = canvas
@@ -289,6 +293,7 @@ export class BrutalGame {
   destroy() {
     this.destroyed = true
     cancelAnimationFrame(this.raf)
+    this.pad.destroy()
     window.removeEventListener('keydown', this.onKeyDown)
     window.removeEventListener('keyup', this.onKeyUp)
     window.removeEventListener('resize', this.resize)
@@ -350,6 +355,7 @@ export class BrutalGame {
     const y = e.offsetY
     if (e.pointerType === 'mouse') {
       this.mouse.seen = true
+      this.mouse.lastT = performance.now()
       this.mouse.x = x
       this.mouse.y = y
       if (e.button === 0) this.mouse.down = true
@@ -376,6 +382,7 @@ export class BrutalGame {
     const x = e.offsetX
     const y = e.offsetY
     if (e.pointerType === 'mouse') {
+      this.mouse.lastT = performance.now()
       this.mouse.x = x
       this.mouse.y = y
       return
@@ -742,6 +749,7 @@ export class BrutalGame {
     this.bannerT = 1.6
     this.shake(10)
     this.hitStop = 0.08
+    this.pad.rumble(1, 0.6, 220)
     this.sfx.overdrive()
     this.burst(this.p.x, this.p.y, 40, ['#ffd23b', '#ff6b35', '#ffffff'], 360, 4, 0.8)
     this.onEvent({ type: 'milestone', kind: 'overdrive', value: this.overdrivesUsed })
@@ -762,6 +770,7 @@ export class BrutalGame {
     this.p.dashY = dy / m
     this.p.dashT = 0.16
     this.p.dashCdT = this.stats.dashCd
+    this.pad.rumble(0.25, 0.5, 70)
     this.sfx.dash()
     this.burst(this.p.x, this.p.y, 10, ['#f5f5f4', '#ff6b35'], 140, 2.5, 0.35)
   }
@@ -853,10 +862,12 @@ export class BrutalGame {
     if (e.kind === 'tank') {
       this.hitStop = 0.06
       this.shake(5)
+      this.pad.rumble(0.45, 0.45, 120)
     }
     if (e.kind === 'boss') {
       this.hitStop = 0.2
       this.shake(16)
+      this.pad.rumble(0.95, 0.7, 380)
       this.sfx.explode(true)
       this.burst(e.x, e.y, 60, ['#ff2222', '#ff9f1a', '#ffffff'], 420, 4.5, 0.9)
       this.pickups.push({ x: e.x, y: e.y, t: 0, life: 14 })
@@ -865,6 +876,7 @@ export class BrutalGame {
       this.onEvent({ type: 'milestone', kind: 'boss', value: this.bossesKilled })
     } else {
       this.sfx.kill()
+      this.pad.rumble(0.08, 0.28, 40)
     }
     if (e.kind !== 'boss') {
       if (e.kind === 'tank' && Math.random() < 0.5) this.pickups.push({ x: e.x, y: e.y, t: 0, life: 12 })
@@ -880,6 +892,7 @@ export class BrutalGame {
     this.streakLevel = 0
     this.hurtFlash = 0.35
     this.shake(9)
+    this.pad.rumble(0.75, 0.35, 130)
     this.sfx.hurt()
     this.floater(this.p.x, this.p.y - 26, `-${Math.round(d)}`, '#ff4444', 17)
     const dx = this.p.x - fromX
@@ -897,9 +910,46 @@ export class BrutalGame {
     this.p.hp = 0
     this.shake(20)
     this.hitStop = 0.12
+    this.pad.rumble(1, 1, 450)
     this.sfx.explode(true)
     this.sfx.hurt()
     this.burst(this.p.x, this.p.y, 70, ['#f5f5f4', '#ff4444', '#ff9f1a'], 380, 4, 1)
+  }
+
+  // ---------------------------------------------------------------- gamepad
+
+  /** pad "owns" aim when it was touched more recently than the mouse */
+  private padMode(): boolean {
+    const p = this.padSnap
+    return !!p && p.connected && p.lastInputAt > 0 && p.lastInputAt >= this.mouse.lastT
+  }
+
+  private handlePadButtons(): void {
+    const pad = this.padSnap
+    if (!pad || !pad.connected) return
+    if (this.phase === 'playing') {
+      if (pad.b || pad.lb || pad.l3) this.tryDash()
+      if (pad.y || pad.r3) this.tryOverdrive()
+      if (pad.start || pad.back) this.togglePause()
+    } else if (this.phase === 'paused') {
+      if (pad.start || pad.a) this.togglePause()
+      else if (pad.b) this.quitToMenu()
+    } else if (this.phase === 'upgrade') {
+      // A / X / Y mirror the 1 / 2 / 3 keys
+      if (pad.a) this.pickFromPad(0)
+      else if (pad.x) this.pickFromPad(1)
+      else if (pad.y) this.pickFromPad(2)
+    } else if (this.phase === 'gameover') {
+      if (pad.a || pad.start) this.startRun()
+    } else if (this.phase === 'menu') {
+      // menus are DOM overlays — let the page start the run
+      if (pad.a || pad.start) this.onEvent({ type: 'padstart' })
+    }
+  }
+
+  private pickFromPad(i: number): void {
+    const c = this.choices[i]
+    if (c) this.pickUpgrade(c.id)
   }
 
   // ---------------------------------------------------------------- input resolve
@@ -911,6 +961,12 @@ export class BrutalGame {
     if (this.keys.has('KeyS') || this.keys.has('ArrowDown')) y += 1
     if (this.keys.has('KeyA') || this.keys.has('ArrowLeft')) x -= 1
     if (this.keys.has('KeyD') || this.keys.has('ArrowRight')) x += 1
+    const pad = this.padSnap
+    if (pad && (pad.move.x !== 0 || pad.move.y !== 0)) {
+      // analog — partial tilt walks, full tilt runs
+      x += pad.move.x
+      y += pad.move.y
+    }
     if (this.touchMove.active) {
       const dx = this.touchMove.x - this.touchMove.ox
       const dy = this.touchMove.y - this.touchMove.oy
@@ -954,6 +1010,25 @@ export class BrutalGame {
         return { firing: m > 24 }
       }
     }
+    // gamepad right stick — twin-stick aim, trigger fires
+    const pad = this.padSnap
+    if (pad && pad.aimActive) {
+      this.p.aimX = pad.aim.x
+      this.p.aimY = pad.aim.y
+      return { firing: pad.fire }
+    }
+    // gamepad move-only: soft auto-aim, fire stays manual on the trigger
+    if (pad && this.padMode()) {
+      const t = this.nearestEnemy()
+      if (t) {
+        const dx = t.x - this.p.x
+        const dy = t.y - this.p.y
+        const m = Math.hypot(dx, dy) || 1
+        this.p.aimX = dx / m
+        this.p.aimY = dy / m
+      }
+      return { firing: pad.fire }
+    }
     // touch with no aim stick: auto-aim + auto-fire
     if (this.isTouch && !this.mouse.seen) {
       const t = this.nearestEnemy()
@@ -986,6 +1061,10 @@ export class BrutalGame {
     this.raf = requestAnimationFrame(this.loop)
     const realDt = Math.min(0.05, Math.max(0.0001, (t - this.lastT) / 1000))
     this.lastT = t
+
+    // gamepad — poll every frame so menus, pause and gameplay all react
+    this.padSnap = this.pad.poll()
+    this.handlePadButtons()
 
     let dt = realDt
     if (this.hitStop > 0) {
@@ -1131,6 +1210,7 @@ export class BrutalGame {
         this.burst(m.x, m.y, 6, ['#ff4444', '#7f1d1d'], 120, 2.4, 0.35)
         if (m.kind === 'boss') {
           this.shake(10)
+          this.pad.rumble(0.6, 0.2, 250)
         }
       }
     }
@@ -2048,7 +2128,9 @@ export class BrutalGame {
   }
 
   private drawLaser() {
-    if (this.phase !== 'playing' || this.isTouch || !this.mouse.seen || this.dying) return
+    if (this.phase !== 'playing' || this.dying) return
+    const padMode = this.padMode()
+    if (!(padMode || (!this.isTouch && this.mouse.seen))) return
     const ctx = this.ctx
     const len = 560
     const x0 = this.p.x + this.p.aimX * 22
@@ -2068,6 +2150,26 @@ export class BrutalGame {
     ctx.lineTo(x1, y1)
     ctx.stroke()
     ctx.restore()
+    // pad-only reticle — twin-stick anchor where shots converge
+    if (padMode) {
+      this.crossPulse = Math.max(0, this.crossPulse - 0.07)
+      const rx = this.p.x + this.p.aimX * 170
+      const ry = this.p.y + this.p.aimY * 170
+      const s = 7 + this.crossPulse * 6
+      ctx.save()
+      ctx.translate(rx, ry)
+      ctx.rotate(Math.PI / 4)
+      ctx.strokeStyle = this.odActive > 0 ? '#ffd23b' : '#ff4444'
+      ctx.lineWidth = 2
+      ctx.shadowColor = ctx.strokeStyle as string
+      ctx.shadowBlur = 6
+      ctx.strokeRect(-s / 2, -s / 2, s, s)
+      ctx.restore()
+      ctx.fillStyle = '#ffffff'
+      ctx.beginPath()
+      ctx.arc(rx, ry, 1.4, 0, Math.PI * 2)
+      ctx.fill()
+    }
   }
 
   private drawLowHp() {
@@ -2092,7 +2194,7 @@ export class BrutalGame {
   }
 
   private drawCrosshair() {
-    const show = this.phase === 'playing' && !this.isTouch && this.mouse.seen
+    const show = this.phase === 'playing' && !this.isTouch && this.mouse.seen && !this.padMode()
     this.canvas.style.cursor = show ? 'none' : ''
     if (!show) return
     const ctx = this.ctx

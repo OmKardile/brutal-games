@@ -8,6 +8,9 @@ Two free browser games in one brutal arcade — a fan-made tribute to
 - **BRUTAL//STACK** (`/stack`) — one-tap isometric tower stacker. Drop the block, slice the
   overhang, chain PERFECT drops (rising pentatonic chimes) to regrow the tower. Instant retry.
 
+Keyboard + mouse, touch (virtual sticks) and gamepad (twin-stick + rumble) all work in
+both games — plug in a pad and press any button to link it.
+
 Plus an optional rewards program: players earn points for genuine play and receive a
 proportional share of a monthly revenue pool. Rewards: `/rewards` (needs an account).
 

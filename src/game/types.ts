@@ -44,3 +44,4 @@ export type GameEvent =
   | { type: 'choices'; choices: UpgradeDef[] }
   | { type: 'gameover'; stats: RunStats }
   | { type: 'milestone'; kind: 'combo' | 'boss' | 'wave' | 'overdrive' | 'elite'; value: number }
+  | { type: 'padstart' } // gamepad confirm pressed on a menu/gameover overlay

@@ -18,6 +18,7 @@ import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { RewardsHud } from '@/components/RewardsHud'
 import { useToast } from '@/hooks/use-toast'
+import { subscribeGamepads } from '@/game/gamepad'
 import {
   fetchBoard as fetchBoardApi,
   recallPlayerName,
@@ -28,6 +29,7 @@ import {
 import {
   ArrowLeft,
   Crosshair,
+  Gamepad2,
   Home as HomeIcon,
   Keyboard,
   Lock,
@@ -73,6 +75,8 @@ export default function PlayPage() {
   const [pilot, setPilot] = useState<PilotData>(() => emptyPilot())
   const [xpGain, setXpGain] = useState(0)
   const [unlockedThisRun, setUnlockedThisRun] = useState<string[]>([])
+  const [padConnected, setPadConnected] = useState(false)
+  const [padId, setPadId] = useState('')
 
   const unlockAchievement = useCallback(
     (id: string) => {
@@ -150,6 +154,10 @@ export default function PlayPage() {
           setNewBest(false)
           return prev
         })
+      } else if (ev.type === 'padstart') {
+        // gamepad A / Start on the menu overlay — mirrors the START RUN button
+        engineRef.current?.unlockAudio()
+        engineRef.current?.startRun()
       }
     })
     engineRef.current = engine
@@ -174,6 +182,14 @@ export default function PlayPage() {
       engineRef.current = null
     }
   }, [fetchBoard, unlockAchievement])
+
+  // gamepad link badge — fires on connect/disconnect (Chrome needs one button press)
+  useEffect(() => {
+    return subscribeGamepads((connected, id) => {
+      setPadConnected(connected)
+      setPadId(id)
+    })
+  }, [])
 
   const start = () => {
     engineRef.current?.unlockAudio()
@@ -248,6 +264,15 @@ export default function PlayPage() {
       {/* corner controls */}
       {showCornerControls && (
         <div className="absolute right-3 top-3 z-20 flex gap-2">
+          {padConnected && (
+            <div
+              className="flex h-9 items-center gap-1.5 rounded border border-amber-800/60 bg-black/50 px-2.5 text-[9px] tracking-widest text-amber-400"
+              title={padId || 'gamepad connected'}
+            >
+              <Gamepad2 className="h-3.5 w-3.5" />
+              PAD
+            </div>
+          )}
           <Button
             size="icon"
             variant="outline"
@@ -380,7 +405,7 @@ export default function PlayPage() {
               </Link>
             </div>
 
-            <div className="mt-6 grid gap-3 md:grid-cols-2">
+            <div className="mt-6 grid gap-3 md:grid-cols-3">
               <div className="rounded border border-red-950/80 bg-black/60 p-4">
                 <div className="mb-3 flex items-center gap-2 text-xs tracking-widest text-stone-400">
                   <Keyboard className="h-4 w-4 text-red-500" /> KEYBOARD + MOUSE
@@ -421,6 +446,40 @@ export default function PlayPage() {
                   </li>
                   <li>Move-only? Auto-aim fires for you</li>
                   <li>Pick upgrades between waves — 1 / 2 / 3 keys</li>
+                </ul>
+              </div>
+              <div className="rounded border border-red-950/80 bg-black/60 p-4">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-xs tracking-widest text-stone-400">
+                    <Gamepad2 className="h-4 w-4 text-red-500" /> GAMEPAD
+                  </div>
+                  <span
+                    className={`text-[9px] tracking-widest ${
+                      padConnected ? 'text-emerald-400' : 'text-stone-600'
+                    }`}
+                    title={padConnected ? padId : 'plug in a pad and press any button'}
+                  >
+                    {padConnected ? 'LINKED' : 'PRESS ANY BUTTON'}
+                  </span>
+                </div>
+                <ul className="space-y-1.5 text-xs text-stone-300">
+                  <li>
+                    <span className="text-red-400">LEFT STICK / D-PAD</span> — move
+                  </li>
+                  <li>
+                    <span className="text-red-400">RIGHT STICK</span> — aim ·{' '}
+                    <span className="text-red-400">RT / R2 / A</span> — fire
+                  </li>
+                  <li>
+                    <span className="text-red-400">B / LB</span> — dash ·{' '}
+                    <span className="text-amber-400">Y / TRIANGLE</span> — overdrive
+                  </li>
+                  <li>
+                    <span className="text-red-400">START</span> — pause ·{' '}
+                    <span className="text-red-400">A</span> — restart / confirm
+                  </li>
+                  <li>Pick upgrades — A / X / Y</li>
+                  <li>Move-only? Auto-aim tracks, trigger fires</li>
                 </ul>
               </div>
             </div>

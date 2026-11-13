@@ -3,6 +3,27 @@
 All notable changes to BRUTAL//GAMES. Dates are UTC. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions are ours, not semver-strict.
 
+## [0.5.0] — 2026-11-13
+
+### Added — controller support (both games)
+- New shared `src/game/gamepad.ts`: Gamepad API reader with radial deadzones
+  (analog walk/run), edge-triggered buttons, trigger-as-button handling, a
+  throttled dual-rumble wrapper, and a React-friendly `subscribeGamepads()`
+  connection watcher. Standard mapping preferred, others best-effort; SSR-safe.
+- ARENA twin-stick controls: left stick / d-pad moves (analog), right stick
+  aims with a laser + diamond reticle, RT/R2/LT/RB/A fire, B/LB/L3 dash,
+  Y/R3 overdrive, Start/Select pause, A/X/Y pick upgrades (mirrors 1/2/3),
+  A or Start restarts after death, B abandons a paused run. Move-only play
+  gets soft auto-aim (fire stays on the trigger). Mouse and pad coexist —
+  whichever was touched last owns aiming.
+- Haptics: rumble on dash, overdrive, kills (throttled), tank/boss kills,
+  taking damage, death and boss spawn; strong events always cut through.
+- STACK: any face/shoulder/trigger button drops the block, A or Start
+  starts/retries, rumble on drops (perfects scale with streak, regrow,
+  altitude milestones, collapse).
+- UI: live "PAD LINKED" badge on both games, GAMEPAD mapping card in the
+  arena menu, pad hints in STACK rules and in-play tip.
+
 ## [0.4.1] — 2026-11-13
 
 ### Fixed — static-site (GitHub Pages) asset bugs

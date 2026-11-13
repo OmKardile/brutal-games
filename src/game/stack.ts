@@ -10,6 +10,8 @@
 // The engine owns the canvas only. Menus / HUD / leaderboard live in the page
 // (src/app/stack/page.tsx) and receive events through the callback.
 
+import { GamepadReader, type PadSnapshot } from './gamepad'
+
 export type StackPhase = 'idle' | 'playing' | 'over'
 
 export interface StackStats {
@@ -22,6 +24,7 @@ export type StackEvent =
   | { type: 'phase'; phase: StackPhase }
   | { type: 'drop'; score: number; streak: number }
   | { type: 'gameover'; stats: StackStats }
+  | { type: 'padstart' } // gamepad confirm pressed on the menu / game-over overlay
 
 interface Block {
   x: number // center, world px
@@ -189,6 +192,8 @@ export class StackGame {
   private raf = 0
   private lastT = 0
   private dead = false
+  private pad = new GamepadReader()
+  private padSnap: PadSnapshot | null = null
 
   // layout (px, css units)
   private W = 0
@@ -249,6 +254,7 @@ export class StackGame {
   destroy(): void {
     this.dead = true
     cancelAnimationFrame(this.raf)
+    this.pad.destroy()
     this.canvas.removeEventListener('pointerdown', this.onPointerDown)
     window.removeEventListener('keydown', this.onKeyDown)
     window.removeEventListener('resize', this.onResize)
@@ -402,6 +408,7 @@ export class StackGame {
         const after = Math.min(newW, newD)
         if (after > before + 0.5) {
           this.audio.grow()
+          this.pad.rumble(0.35, 0.7, 140)
           this.addPopup(newX, newZ, this.topY + this.BH, '+GROW', '#fbbf24', 12)
         }
       }
@@ -454,6 +461,7 @@ export class StackGame {
 
     if (perfect) {
       this.audio.perfect(this.streak)
+      this.pad.rumble(Math.min(0.5, 0.18 + this.streak * 0.05), 0.6, 70)
       this.rings.push({ x: newX, z: newZ, w: newW, d: newD, y: this.topY, life: 0.5 })
       const label = this.streak >= 2 ? `PERFECT ×${this.streak}` : 'PERFECT'
       this.addPopup(newX, newZ, this.topY, label, this.streak >= 2 ? '#fbbf24' : '#fafafa', 13)
@@ -461,6 +469,7 @@ export class StackGame {
       this.shake(0.06, 2.5)
     } else {
       this.audio.drop()
+      this.pad.rumble(0.1, 0.18, 35)
       this.shake(0.05, 2)
     }
 
@@ -468,6 +477,7 @@ export class StackGame {
     if (this.score % 10 === 0) {
       this.bgPulse = 1
       this.audio.milestone()
+      this.pad.rumble(0.45, 0.45, 150)
       this.addPopup(newX, newZ, this.topY + this.BH * 0.5, `ALTITUDE ${this.score}`, '#ef4444', 16)
     }
 
@@ -515,6 +525,7 @@ export class StackGame {
     this.topY = Math.max(this.BH, this.topY - this.BH * crown.length)
     this.spawnSparks(top.x, top.z, this.topY, 34, '#ef4444')
     this.shake(0.45, 13)
+    this.pad.rumble(0.9, 0.9, 420)
     this.audio.over()
     this.phase = 'over'
     this.emit({ type: 'phase', phase: 'over' })
@@ -780,6 +791,20 @@ export class StackGame {
     if (this.dead) return
     const dt = Math.min(0.05, (t - this.lastT) / 1000)
     this.lastT = t
+    // gamepad — any face / shoulder / trigger drops the block
+    this.padSnap = this.pad.poll()
+    const pad = this.padSnap
+    if (pad.connected) {
+      if (this.phase === 'playing') {
+        if (pad.a || pad.b || pad.x || pad.y || pad.lb || pad.rb || pad.lt || pad.rt) {
+          this.audio.ensure()
+          this.tryDrop()
+        }
+      } else if (this.phase === 'idle' || this.phase === 'over') {
+        // overlays are DOM — let the page start / retry
+        if (pad.a || pad.start) this.emit({ type: 'padstart' })
+      }
+    }
     this.update(dt)
     this.render(dt)
     this.raf = requestAnimationFrame(this.loop)

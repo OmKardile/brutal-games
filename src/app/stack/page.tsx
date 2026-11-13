@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { StackGame, type StackEvent, type StackStats } from '@/game/stack'
+import { subscribeGamepads } from '@/game/gamepad'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -18,6 +19,7 @@ import {
 import {
   ArrowLeft,
   Crosshair,
+  Gamepad2,
   Layers,
   MousePointerClick,
   Play,
@@ -54,6 +56,14 @@ export default function StackPage() {
   const [best, setBest] = useState(0)
   const [bestStreak, setBestStreak] = useState(0)
   const [newBest, setNewBest] = useState(false)
+  const [padConnected, setPadConnected] = useState(false)
+  const [padId, setPadId] = useState('')
+
+  // gamepad start/retry reads the live phase through a ref (callback is bound once)
+  const phaseRef = useRef<PagePhase>('menu')
+  useEffect(() => {
+    phaseRef.current = phase
+  }, [phase])
 
   const applyBoard = useCallback((res: BoardResult) => {
     setBoard(res.scores)
@@ -112,6 +122,13 @@ export default function StackPage() {
         }
       } else if (ev.type === 'gameover') {
         statsRef.current = ev.stats
+      } else if (ev.type === 'padstart') {
+        // gamepad A / Start on the menu or game-over overlay
+        if (phaseRef.current === 'menu') {
+          engineRef.current?.start()
+        } else if (phaseRef.current === 'over' && performance.now() - overSinceRef.current > 450) {
+          engineRef.current?.start()
+        }
       }
     })
     engineRef.current = engine
@@ -130,6 +147,14 @@ export default function StackPage() {
       engineRef.current = null
     }
   }, [refreshBoard])
+
+  // gamepad link badge — fires on connect/disconnect (Chrome needs one button press)
+  useEffect(() => {
+    return subscribeGamepads((connected, id) => {
+      setPadConnected(connected)
+      setPadId(id)
+    })
+  }, [])
 
   const start = useCallback(() => {
     engineRef.current?.start()
@@ -252,11 +277,20 @@ export default function StackPage() {
             )}
             {score < 2 && (
               <div className="mt-2 text-[10px] tracking-[0.35em] text-stone-500">
-                TAP / SPACE — DROP
+                TAP / SPACE / PAD — DROP
               </div>
             )}
           </div>
           <div className="absolute right-3 top-3 z-20 flex gap-2">
+            {padConnected && (
+              <div
+                className="flex h-9 items-center gap-1.5 rounded border border-amber-800/60 bg-black/50 px-2.5 text-[9px] tracking-widest text-amber-400"
+                title={padId || 'gamepad connected'}
+              >
+                <Gamepad2 className="h-3.5 w-3.5" />
+                PAD
+              </div>
+            )}
             <Button
               size="icon"
               variant="outline"
@@ -313,8 +347,8 @@ export default function StackPage() {
               </div>
               <div className="mt-3 grid gap-1.5 text-[11px] leading-relaxed text-stone-400 md:grid-cols-3">
                 <div className="rounded border border-stone-800 bg-black/50 px-2.5 py-2">
-                  <span className="text-red-400">TAP / SPACE</span> — drop the block. The overhang
-                  gets sliced off.
+                  <span className="text-red-400">TAP / SPACE / PAD BUTTON</span> — drop the block.
+                  The overhang gets sliced off.
                 </div>
                 <div className="rounded border border-stone-800 bg-black/50 px-2.5 py-2">
                   <span className="text-amber-400">PERFECT DROPS</span> — stack 3+ in a row and the
