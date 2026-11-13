@@ -54,6 +54,8 @@ model User {
   upiId           String? // format-validated UPI id
   upiKey          String?   @unique // normalized UPI — one account per payout destination
   upiUpdatedAt    DateTime?
+  totpSecret      String? // ADMIN 2FA: AES-256-GCM encrypted TOTP secret (base32 inside)
+  totpEnabledAt   DateTime? // set when the first code was verified — 2FA is live
   lastLoginAt     DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -69,6 +71,7 @@ model User {
   distributions   PoolDistribution[]
   highScores      HighScore[]
   dailyRuns       DailyRun[]
+  adminAudits     AdminAudit[]
 }
 
 // Lightweight own-session approach (no next-auth) — see decisions.md.
@@ -238,7 +241,9 @@ model PayoutRequest {
   status          String    @default("PENDING") // PENDING | APPROVED | REJECTED | PAID
   holdUntil       DateTime? // requestedAt + hold period; approve blocked before this
   requestedAt     DateTime  @default(now())
-  reviewedBy      String? // admin user id
+  idempotencyKey  String?  @unique // client-supplied; replays return the original
+  approvedBy      String? // first approver (two-person rule above threshold)
+  reviewedBy      String? // admin user id (final action)
   reviewedAt      DateTime?
   rejectedReason  String?
   paidAt          DateTime?
@@ -247,6 +252,26 @@ model PayoutRequest {
 
   @@index([status, requestedAt])
   @@index([userId, requestedAt])
+}
+
+// ------------------------------------------------------------------ admin audit
+
+// Append-only audit trail: who did what, when, to what, with before/after
+// snapshots. Written by every admin mutation route — never updated/deleted.
+model AdminAudit {
+  id         String   @id @default(cuid())
+  adminId    String
+  admin      User     @relation(fields: [adminId], references: [id])
+  action     String // PAYOUT_APPROVE | PAYOUT_REJECT | PAYOUT_PAID | USER_FREEZE | ... | SETTINGS_UPDATE
+  targetType String? // payout | user | pool | flag | board | setting | totp
+  targetId   String?
+  before     String? // JSON snapshot
+  after      String? // JSON snapshot
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  @@index([adminId, createdAt])
+  @@index([createdAt])
 }
 
 // ------------------------------------------------------------------ anti-fraud

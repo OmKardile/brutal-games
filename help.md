@@ -62,6 +62,22 @@ program is disabled it disappears entirely.
 
 ## Admins
 
+**Why is the console asking for 2FA?** Since v0.9.2 every admin account MUST
+enroll TOTP two-factor auth (generate a secret in the console, add it to any
+authenticator app, confirm one code). Admin logins then need password + code,
+and admin sessions expire after 1 hour — that is deliberate: the console
+controls real money.
+
+**Payouts are frozen — did something break?** Check SETTINGS for the
+REWARDS_PAYOUTS_PAUSED kill switch. It freezes payout creation and approval
+(losing nothing) during an incident and can be flipped back at runtime.
+Rejecting still works so money can be freed. Every change you make is
+recorded in the AUDIT tab (who/what/when/before/after).
+
+**Self-approval:** you cannot approve a payout for your own player account —
+another admin has to (two-person rule above TWO_PERSON_THRESHOLD_MINOR, off
+by default while there is a single admin).
+
 **Monthly close:** `/admin` → POOL → enter month + net revenue (₹, from the ad network
 report, net of fees) + share % → SAVE → PREVIEW → (review flags first if unsure) → LOCK.
 Locking is final; the snapshot never recomputes.

@@ -18,6 +18,7 @@ import {
   Coins,
   Flag,
   Lock,
+  ScrollText,
   Search,
   Settings,
   ShieldAlert,
@@ -111,6 +112,8 @@ interface UserDetail {
 
 interface SettingsShape {
   REWARDS_ENABLED: boolean
+  REWARDS_PAYOUTS_PAUSED: boolean
+  TWO_PERSON_THRESHOLD_MINOR: number
   SHARE_PERCENT: number
   PAYOUT_CAP_MINOR: number
   MIN_PAYOUT_MINOR: number
@@ -154,9 +157,168 @@ export default function AdminPage() {
     )
   }
 
+  // phase 5: forced TOTP enrollment / short-lived admin session gate — checked
+  // against a real admin route before any console surface renders
   return (
     <main className="min-h-dvh bg-[#070709] px-4 py-8 font-mono text-stone-200">
       <div className="mx-auto max-w-5xl">
+        <AdminGate>
+          <AdminConsole tab={tab} setTab={setTab} />
+        </AdminGate>
+      </div>
+    </main>
+  )
+}
+
+/** Probes /api/admin/settings: TOTP_SETUP_REQUIRED → enrollment flow,
+ *  ADMIN_SESSION_EXPIRED → re-login with 2FA; otherwise renders children. */
+function AdminGate({ children }: { children: React.ReactNode }) {
+  const { refresh } = useSession()
+  const [state, setState] = useState<'checking' | 'ok' | 'enroll' | 'expired'>('checking')
+  const [secret, setSecret] = useState('')
+  const [uri, setUri] = useState('')
+  const [code, setCode] = useState('')
+  const [msg, setMsg] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const probe = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/settings', { cache: 'no-store' })
+      if (res.ok) {
+        setState('ok')
+        return
+      }
+      const data = (await res.json()) as { code?: string }
+      if (data.code === 'TOTP_SETUP_REQUIRED') setState('enroll')
+      else if (data.code === 'ADMIN_SESSION_EXPIRED') setState('expired')
+      else setState('expired')
+    } catch {
+      setState('expired')
+    }
+  }, [])
+
+  useEffect(() => {
+    void probe()
+  }, [probe])
+
+  if (state === 'checking') {
+    return <p className="py-10 text-center text-[11px] tracking-[0.4em] text-stone-600">CHECKING ADMIN SESSION…</p>
+  }
+  if (state === 'ok') return <>{children}</>
+
+  if (state === 'expired') {
+    return (
+      <div className="mx-auto max-w-sm rounded border border-amber-950 bg-black/60 p-6 text-center">
+        <ShieldAlert className="mx-auto mb-3 h-10 w-10 text-amber-500" />
+        <h1 className="text-lg font-black tracking-tight text-amber-500">ADMIN SESSION EXPIRED</h1>
+        <p className="mt-2 text-[10px] leading-relaxed tracking-[0.25em] text-stone-500">
+          ADMIN SESSIONS LAST 1 HOUR. LOG IN AGAIN WITH PASSWORD + 2FA CODE.
+        </p>
+        <Link href="/login" className="mt-4 inline-block text-[10px] tracking-widest text-amber-500 hover:text-amber-400">
+          RE-AUTHENTICATE
+        </Link>
+      </div>
+    )
+  }
+
+  const startSetup = async () => {
+    setBusy(true)
+    setMsg(null)
+    try {
+      const res = await fetch('/api/admin/totp/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      })
+      if (res.ok) {
+        const d = (await res.json()) as { secret: string; uri: string }
+        setSecret(d.secret)
+        setUri(d.uri)
+      } else {
+        setMsg('Setup failed — re-login and retry.')
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const enable = async () => {
+    if (busy || !/^\d{6}$/.test(code)) return
+    setBusy(true)
+    setMsg(null)
+    try {
+      const res = await fetch('/api/admin/totp/enable', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      })
+      if (res.ok) {
+        await refresh()
+        setState('expired') // token was issued pre-enable — re-login with 2FA now
+        setMsg('2FA IS LIVE. LOG IN AGAIN WITH YOUR CODE.')
+      } else {
+        const d = (await res.json()) as { error?: string }
+        setMsg(d.error ?? 'Wrong code.')
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="mx-auto max-w-md rounded border border-amber-950 bg-black/60 p-6">
+      <div className="flex items-center gap-2">
+        <ShieldAlert className="h-5 w-5 text-amber-500" />
+        <h1 className="text-lg font-black tracking-tight text-amber-500">2FA SETUP REQUIRED</h1>
+      </div>
+      <p className="mt-2 text-[10px] leading-relaxed tracking-[0.25em] text-stone-500">
+        ADMIN ACTIONS REQUIRE TOTP TWO-FACTOR AUTH. ADD THE SECRET BELOW TO ANY
+        AUTHENTICATOR APP (GOOGLE AUTHENTICATOR, AEGIS, 1PASSWORD…).
+      </p>
+      {!secret ? (
+        <Button
+          onClick={() => void startSetup()}
+          disabled={busy}
+          className="mt-4 h-11 w-full border border-amber-600/60 bg-amber-600 font-black tracking-widest text-black hover:bg-amber-500"
+        >
+          {busy ? 'GENERATING…' : 'GENERATE SECRET'}
+        </Button>
+      ) : (
+        <div className="mt-4 flex flex-col gap-3">
+          <div className="rounded border border-stone-800 bg-black/80 p-3">
+            <p className="text-[9px] tracking-widest text-stone-600">SECRET (BASE32 — KEEP IT OFFLINE)</p>
+            <p className="mt-1 select-all break-all font-mono text-[12px] font-bold tracking-wider text-amber-400">{secret}</p>
+            <p className="mt-3 text-[9px] tracking-widest text-stone-600">OTPAUTH URI</p>
+            <p className="mt-1 select-all break-all text-[9px] leading-relaxed text-stone-400">{uri}</p>
+          </div>
+          <Input
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            placeholder="6-DIGIT CODE FROM THE APP"
+            inputMode="numeric"
+            maxLength={6}
+            className="h-11 border-amber-900/60 bg-black/60 tracking-[0.4em] focus-visible:ring-amber-500"
+            aria-label="TOTP code"
+          />
+          <Button
+            onClick={() => void enable()}
+            disabled={busy || code.length !== 6}
+            className="h-11 border border-emerald-600/60 bg-emerald-600 font-black tracking-widest text-black hover:bg-emerald-500"
+          >
+            {busy ? 'VERIFYING…' : 'ENABLE 2FA'}
+          </Button>
+        </div>
+      )}
+      {msg && <p className="mt-3 text-[10px] tracking-widest text-amber-500">{msg}</p>}
+    </div>
+  )
+}
+
+function AdminConsole({ tab, setTab }: { tab: string; setTab: (t: string) => void }) {
+  const { me } = useSession()
+  if (!me?.user) return null
+  return (
+    <>
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
             <Link
@@ -175,13 +337,14 @@ export default function AdminPage() {
         </div>
 
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="grid h-auto w-full grid-cols-6 gap-1 rounded border border-stone-800/80 bg-black/60 p-1">
+          <TabsList className="grid h-auto w-full grid-cols-7 gap-1 rounded border border-stone-800/80 bg-black/60 p-1">
             {[
               { v: 'pool', icon: Coins, label: 'POOL' },
               { v: 'payouts', icon: Wallet, label: 'PAYOUTS' },
               { v: 'flags', icon: Flag, label: 'FLAGS' },
               { v: 'boards', icon: Trophy, label: 'BOARDS' },
               { v: 'users', icon: Users, label: 'USERS' },
+              { v: 'audit', icon: ScrollText, label: 'AUDIT' },
               { v: 'settings', icon: Settings, label: 'SETTINGS' },
             ].map((t) => (
               <TabsTrigger
@@ -198,10 +361,10 @@ export default function AdminPage() {
           <TabsContent value="flags"><FlagsTab /></TabsContent>
           <TabsContent value="boards"><BoardsTab /></TabsContent>
           <TabsContent value="users"><UsersTab /></TabsContent>
+          <TabsContent value="audit"><AuditTab /></TabsContent>
           <TabsContent value="settings"><SettingsTab /></TabsContent>
         </Tabs>
-      </div>
-    </main>
+    </>
   )
 }
 
@@ -1050,6 +1213,62 @@ function UsersTab() {
   )
 }
 
+// ---------------------------------------------------------------- audit
+
+interface AuditRow {
+  id: string
+  action: string
+  targetType: string | null
+  targetId: string | null
+  before: string | null
+  after: string | null
+  createdAt: string
+  admin: { id: string; email: string; name: string | null }
+}
+
+function AuditTab() {
+  const [rows, setRows] = useState<AuditRow[]>([])
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch('/api/admin/audit', { cache: 'no-store' })
+        if (res.ok) setRows(((await res.json()) as { audit: AuditRow[] }).audit)
+      } catch {
+        // stale
+      }
+    })()
+  }, [])
+
+  return (
+    <div className="mt-3 rounded border border-stone-800/80 bg-black/60 p-4">
+      <div className="mb-2 flex items-center gap-1.5 text-[10px] tracking-widest text-stone-500">
+        <ScrollText className="h-3.5 w-3.5" /> ADMIN AUDIT TRAIL (APPEND-ONLY, NEWEST FIRST)
+      </div>
+      {rows.length === 0 && (
+        <p className="py-2 text-[10px] tracking-widest text-stone-600">NO ACTIONS RECORDED YET</p>
+      )}
+      <div className="max-h-[32rem] overflow-y-auto">
+        <table className="w-full text-[10px]">
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id} className="border-b border-stone-900 align-top last:border-0">
+                <td className="w-28 py-1.5 pr-2 text-stone-600">{fmtDateTime(r.createdAt)}</td>
+                <td className="w-32 py-1.5 pr-2 text-stone-500">{r.admin.email}</td>
+                <td className="w-36 py-1.5 pr-2 font-bold tracking-wider text-amber-400">{r.action}</td>
+                <td className="w-16 py-1.5 pr-2 text-stone-600">{r.targetType ?? '—'}</td>
+                <td className="py-1.5 break-all text-stone-400">
+                  {r.after ? r.after.slice(0, 160) : r.targetId ?? ''}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 // ---------------------------------------------------------------- settings
 
 const NUM_FIELDS: Array<{ key: keyof SettingsShape; label: string; hint: string }> = [
@@ -1117,6 +1336,44 @@ function SettingsTab() {
             checked={settings.REWARDS_ENABLED}
             onCheckedChange={(v) => setSettings({ ...settings, REWARDS_ENABLED: v })}
             className="data-[state=checked]:bg-emerald-600"
+          />
+        </div>
+      </div>
+
+      <div className="rounded border border-amber-950 bg-black/60 p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-[12px] font-black tracking-[0.2em] text-amber-400">
+              KILL SWITCH — REWARDS_PAYOUTS_PAUSED
+            </h3>
+            <p className="mt-1 text-[10px] tracking-widest text-stone-500">
+              FREEZES PAYOUT CREATION + APPROVAL WITHOUT TOUCHING POINT EARNING.
+              FLIP DURING AN INCIDENT — NO REDEPLOY NEEDED.
+            </p>
+          </div>
+          <Switch
+            checked={settings.REWARDS_PAYOUTS_PAUSED}
+            onCheckedChange={(v) => setSettings({ ...settings, REWARDS_PAYOUTS_PAUSED: v })}
+            className="data-[state=checked]:bg-red-600"
+          />
+        </div>
+      </div>
+
+      <div className="rounded border border-amber-950 bg-black/60 p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-[12px] font-black tracking-[0.2em] text-amber-400">
+              KILL SWITCH — REWARDS_PAYOUTS_PAUSED
+            </h3>
+            <p className="mt-1 text-[10px] tracking-widest text-stone-500">
+              FREEZES ALL PAYOUT CREATION + APPROVAL WITHOUT TOUCHING POINT
+              EARNING. FLIP DURING AN INCIDENT — NO REDEPLOY NEEDED.
+            </p>
+          </div>
+          <Switch
+            checked={settings.REWARDS_PAYOUTS_PAUSED}
+            onCheckedChange={(v) => setSettings({ ...settings, REWARDS_PAYOUTS_PAUSED: v })}
+            className="data-[state=checked]:bg-red-600"
           />
         </div>
       </div>

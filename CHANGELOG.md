@@ -3,6 +3,59 @@
 All notable changes to BRUTAL//GAMES. Dates are UTC. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions are ours, not semver-strict.
 
+## [0.9.2] — 2026-11-13
+
+### Security — hardening program phase 5 (payout integrity + admin hardening + kill switch + reconciliation)
+
+Closes H5, H8, M9 and the reconciliation half of M7 from docs/threat-model.md.
+`REWARDS_ENABLED` stays false. Rationale: ADR-026.
+
+**Payout integrity (H8)**
+- createPayoutRequest is TRANSACTIONAL: balance + open-request checks and the
+  insert run in one transaction — concurrent requests can never double-reserve
+  (verified by a parallel double-spend test: exactly one reservation survives).
+- Client-supplied idempotency keys: replays return the original request.
+- approve/reject/mark-paid re-check status inside the transaction; paying an
+  already-paid request is impossible.
+
+**Admin hardening (H5)**
+- Mandatory TOTP 2FA (RFC 6238 on node:crypto — zero new deps; secrets
+  AES-256-GCM encrypted at rest, displayed exactly once). ADMIN login requires
+  password + 6-digit code once enrolled; admin routes return
+  TOTP_SETUP_REQUIRED until 2FA is live (forced enrollment on first visit).
+- Separate short-lived (1h, SameSite=Strict) HMAC admin-session cookie — a
+  stolen session cookie alone never reaches admin routes. Optional
+  ADMIN_IP_ALLOWLIST (env) pins admin access to known networks.
+- Self-approval blocked outright; optional two-person approval above
+  TWO_PERSON_THRESHOLD_MINOR (default 0 = disabled, single-admin reality).
+- Append-only AdminAudit trail (who/what/when/before/after + IP) on every
+  admin mutation — payouts, users, pools, flags, boards, settings, TOTP. New
+  admin AUDIT tab.
+
+**Kill switch (M9) + reconciliation**
+- REWARDS_PAYOUTS_PAUSED: runtime-flippable payout freeze (creation +
+  approve + mark-paid blocked; reject still frees money). Toggle in the admin
+  settings tab — no redeploy.
+- monthlyReconciliation(month): Σ non-rejected payouts vs Σ credited
+  distributions (globally + per user), ok/issues verdict —
+  GET /api/admin/reconciliation (phase 6 wires mismatch alerts).
+
+**Client**: login page shows a 2FA code field for admin accounts (when the
+server asks); admin console gains the enrollment/expired-session gates, the
+AUDIT tab and the kill-switch toggle.
+
+**Tests**: 199 pass (was 180) — new `tests/payout-integrity.test.ts`
+(RFC 6238 vectors incl. the official SHA-1 test secret, window verification,
+AES round-trip, admin-token issue/verify/expiry/forgery, concurrent
+double-spend, idempotent replays, self-approval, two-person flow,
+double-approve, kill switch incl. reject-still-works, reconciliation
+ok/over-payment/no-pool, audit rows).
+
+### Changed
+- docs: ADR-026, threat-model status (H5/H8/M9 closed), technical docs,
+  compact snapshot, help (admin FAQ), .env.example (ADMIN_IP_ALLOWLIST).
+  Known gap: two-person payouts need ≥2 admins (threshold ships disabled).
+
 ## [0.9.1] — 2026-11-13
 
 ### Security — hardening program phase 4 (risk scoring, board integrity, account/device signals)

@@ -7,6 +7,12 @@ import { db } from '@/lib/db'
 export interface RewardSettings {
   /** Master flag. When false: no points are earned and reward UI is hidden. */
   REWARDS_ENABLED: boolean
+  /** Payout kill switch (phase 5): freezes money movement WITHOUT killing the
+   *  whole rewards program — admin-flippable at runtime, no redeploy. */
+  REWARDS_PAYOUTS_PAUSED: boolean
+  /** Two-person approval threshold (paise). 0 = disabled (single-admin
+   *  default); above it, a payout needs two DIFFERENT admins to approve. */
+  TWO_PERSON_THRESHOLD_MINOR: number
   /** % of net monthly ad revenue that forms the player pool. */
   SHARE_PERCENT: number
   /** Per-player monthly payout cap (paise). */
@@ -36,6 +42,8 @@ export interface RewardSettings {
 
 export const DEFAULT_SETTINGS: RewardSettings = {
   REWARDS_ENABLED: false,
+  REWARDS_PAYOUTS_PAUSED: false,
+  TWO_PERSON_THRESHOLD_MINOR: 0, // disabled by default (single-admin reality)
   SHARE_PERCENT: 30,
   PAYOUT_CAP_MINOR: 100_000, // ₹1,000
   MIN_PAYOUT_MINOR: 10_000, // ₹100
@@ -62,6 +70,7 @@ const INT_KEYS = [
   'STREAK_MAX',
   'DAILY_CHALLENGE_POINTS',
   'HOLD_PERIOD_DAYS',
+  'TWO_PERSON_THRESHOLD_MINOR',
 ] as const
 
 let seeded = false
@@ -100,6 +109,9 @@ export async function getSettings(): Promise<RewardSettings> {
 export async function updateSettings(patch: Partial<RewardSettings>): Promise<RewardSettings> {
   const clean: Partial<RewardSettings> = {}
   if (typeof patch.REWARDS_ENABLED === 'boolean') clean.REWARDS_ENABLED = patch.REWARDS_ENABLED
+  if (typeof patch.REWARDS_PAYOUTS_PAUSED === 'boolean') {
+    clean.REWARDS_PAYOUTS_PAUSED = patch.REWARDS_PAYOUTS_PAUSED
+  }
   for (const k of INT_KEYS) {
     const v = patch[k]
     if (typeof v === 'number' && Number.isFinite(v)) {

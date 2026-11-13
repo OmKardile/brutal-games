@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { requireAdmin } from '@/lib/auth/guard'
-import { payoutInclude } from '@/lib/rewards/payouts'
+import { payoutInclude, approvePayout, rejectPayout, markPayoutPaid } from '@/lib/rewards/payouts'
+import { getSettings } from '@/lib/rewards/config'
+import { logAdminAction } from '@/lib/audit'
 import { csrfBlocked } from '@/lib/http'
+import { clientIp } from '@/lib/env'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,7 +21,7 @@ const ActionSchema = z.discriminatedUnion('action', [
 ])
 
 export async function GET(req: NextRequest) {
-  const { error } = await requireAdmin()
+  const { error } = await requireAdmin(req)
   if (error) return error
 
   const status = req.nextUrl.searchParams.get('status')
@@ -34,72 +37,71 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ requests })
 }
 
+/**
+ * POST /api/admin/payouts — approve / reject / mark paid. All integrity rules
+ * live in src/lib/rewards/payouts.ts (transactional, self-approval blocked,
+ * two-person rule, kill switch); this route adds the audit trail.
+ */
 export async function POST(req: NextRequest) {
   const csrf = csrfBlocked(req)
   if (csrf) return csrf
 
-  const { user: admin, error } = await requireAdmin()
+  const { user: admin, error } = await requireAdmin(req)
   if (error) return error
+  const ip = clientIp(req)
 
   const body = await req.json().catch(() => null)
   const parsed = ActionSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: 'Invalid payload.' }, { status: 400 })
   const input = parsed.data
 
-  const request = await db.payoutRequest.findUnique({ where: { id: input.id } })
-  if (!request) return NextResponse.json({ error: 'Not found.' }, { status: 404 })
+  const settings = await getSettings()
+  const before = await db.payoutRequest.findUnique({ where: { id: input.id } })
+  if (!before) return NextResponse.json({ error: 'Not found.' }, { status: 404 })
 
   if (input.action === 'approve') {
-    if (request.status !== 'PENDING') {
-      return NextResponse.json({ error: 'Only PENDING requests can be approved.' }, { status: 409 })
-    }
-    if (request.holdUntil && request.holdUntil.getTime() > Date.now()) {
-      return NextResponse.json(
-        { error: `Hold period active until ${request.holdUntil.toISOString()}.` },
-        { status: 409 },
-      )
-    }
-    const updated = await db.payoutRequest.update({
-      where: { id: request.id },
-      data: { status: 'APPROVED', reviewedBy: admin.id, reviewedAt: new Date() },
+    const result = await approvePayout(admin.id, input.id, settings)
+    if (!result.ok) return NextResponse.json({ error: result.message, code: result.code }, { status: 409 })
+    await logAdminAction({
+      adminId: admin.id,
+      action: result.awaitingSecond ? 'PAYOUT_FIRST_APPROVE' : 'PAYOUT_APPROVE',
+      targetType: 'payout',
+      targetId: input.id,
+      before: { status: before.status },
+      after: { status: result.request.status, approvedBy: result.request.approvedBy },
+      ip,
     })
-    return NextResponse.json({ request: updated })
+    return NextResponse.json({
+      request: result.request,
+      ...(result.awaitingSecond ? { awaitingSecondAdmin: true } : {}),
+    })
   }
 
   if (input.action === 'reject') {
-    if (request.status !== 'PENDING' && request.status !== 'APPROVED') {
-      return NextResponse.json({ error: 'Only PENDING/APPROVED requests can be rejected.' }, { status: 409 })
-    }
-    const updated = await db.payoutRequest.update({
-      where: { id: request.id },
-      data: {
-        status: 'REJECTED',
-        rejectedReason: input.reason,
-        reviewedBy: admin.id,
-        reviewedAt: new Date(),
-      },
+    const result = await rejectPayout(admin.id, input.id, input.reason)
+    if (!result.ok) return NextResponse.json({ error: result.message, code: result.code }, { status: 409 })
+    await logAdminAction({
+      adminId: admin.id,
+      action: 'PAYOUT_REJECT',
+      targetType: 'payout',
+      targetId: input.id,
+      before: { status: before.status },
+      after: { status: 'REJECTED', reason: input.reason },
+      ip,
     })
-    // freed money returns to the pool's voided counter (stays unpaid)
-    await db.monthlyPool
-      .updateMany({
-        where: { status: 'LOCKED', distributions: { some: { userId: request.userId } } },
-        data: { voidedMinor: { increment: request.amountMinor } },
-      })
-      .catch(() => undefined)
-    return NextResponse.json({ request: updated })
+    return NextResponse.json({ request: result.request })
   }
 
-  // paid
-  if (request.status !== 'APPROVED') {
-    return NextResponse.json({ error: 'Only APPROVED requests can be marked paid.' }, { status: 409 })
-  }
-  const updated = await db.payoutRequest.update({
-    where: { id: request.id },
-    data: {
-      status: 'PAID',
-      paidAt: new Date(),
-      transactionRef: input.transactionRef,
-    },
+  const result = await markPayoutPaid(admin.id, input.id, input.transactionRef, settings)
+  if (!result.ok) return NextResponse.json({ error: result.message, code: result.code }, { status: 409 })
+  await logAdminAction({
+    adminId: admin.id,
+    action: 'PAYOUT_PAID',
+    targetType: 'payout',
+    targetId: input.id,
+    before: { status: before.status },
+    after: { status: 'PAID', transactionRef: input.transactionRef },
+    ip,
   })
-  return NextResponse.json({ request: updated })
+  return NextResponse.json({ request: result.request })
 }

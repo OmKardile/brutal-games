@@ -363,3 +363,46 @@ auto-release, or instant admin verify) — the accepted false-positive cost.
 DailyRun/HighScore gain pending/removal columns and a User FK (referential
 integrity). Account deletion (GDPR-style) stays deferred: payout records must
 outlive accounts for money audit (documented in the runbook, phase 6).
+
+## ADR-026 — Payout transactionality, admin 2FA/audit, kill switch (phase 5)
+
+Date: 2026-11-13 · Status: accepted (phase 5)
+
+**Context.** Payout create/approve were check-then-write (H8: concurrent
+requests could double-reserve or double-approve), the admin surface was one
+password away from the money (H5: no 2FA, no audit log, self-approval
+possible), and the only kill switch killed the whole program (M9).
+
+**Decision.**
+1. **Transactional payouts**: balance + open-request checks and the insert
+   happen inside ONE interactive transaction (SQLite serializes writers);
+   client-supplied idempotency keys make replays return the original request.
+   Approve/reject/paid re-check status in-tx (double-approve impossible).
+2. **Admin hardening (H5)**: mandatory TOTP 2FA (RFC 6238, implemented on
+   node:crypto only; secrets AES-256-GCM encrypted at rest, shown once).
+   ADMIN login requires password + code once enrolled; a separate short-lived
+   (1h) HMAC admin-session cookie is required by requireAdmin on top of the
+   regular session — a stolen session cookie alone never reaches admin
+   routes. Optional ADMIN_IP_ALLOWLIST. Forced enrollment: admin routes
+   return TOTP_SETUP_REQUIRED until 2FA is live (only the setup/enable
+   routes stay open).
+3. **Audit log**: append-only AdminAudit rows (who/what/when/target/
+   before/after + IP) on EVERY admin mutation — payouts, users, pools,
+   flags, boards, settings, TOTP. Admin console gains an AUDIT tab.
+4. **Integrity rules**: self-approval blocked outright; optional two-person
+   approval above TWO_PERSON_THRESHOLD_MINOR (default 0 = disabled —
+   single-admin reality; first approve records the approver, a DIFFERENT
+   admin finalizes).
+5. **Kill switch (M9)**: REWARDS_PAYOUTS_PAUSED setting — freezes payout
+   creation + approve/mark-paid at runtime (reject stays available to free
+   money), flippable from the admin console without a redeploy.
+6. **Reconciliation**: monthlyReconciliation(month) verifies Σ non-rejected
+   payouts ≤ Σ credited distributions (globally and per user) and reports
+   issues; surfaced via GET /api/admin/reconciliation (phase 6 wires alerts).
+
+**Consequences.** The pre-2FA admin (dev seed) is force-enrolled on first
+console visit. Admin sessions expire hourly by design (re-login with 2FA).
+The stateless admin token dies within 1h even if a session leaks; freeze/
+password-change still revoke the underlying session. Two-person payouts are
+structurally impossible with a single admin — the threshold ships disabled
+and documented.

@@ -13,6 +13,8 @@ export const dynamic = 'force-dynamic'
 const RequestSchema = z.object({
   amountMinor: z.number().int().min(1).max(100_000_000),
   turnstileToken: z.string().optional(),
+  /** client-generated; a double-click or replay returns the original request */
+  idempotencyKey: z.string().min(8).max(100).optional(),
 })
 
 /** Own payout history. */
@@ -58,6 +60,7 @@ export async function POST(req: NextRequest) {
     user,
     settings,
     amountMinor: parsed.data.amountMinor,
+    idempotencyKey: parsed.data.idempotencyKey,
   })
   if (!result.ok) {
     return NextResponse.json({ error: result.message, code: result.code }, { status: 400 })

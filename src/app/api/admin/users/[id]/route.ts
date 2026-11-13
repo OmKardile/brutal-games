@@ -5,6 +5,8 @@ import { requireAdmin } from '@/lib/auth/guard'
 import { voidEvents, lifetimePoints } from '@/lib/rewards/points'
 import { rewardBalance } from '@/lib/rewards/payouts'
 import { destroyAllUserSessions } from '@/lib/auth/session'
+import { logAdminAction } from '@/lib/audit'
+import { clientIp } from '@/lib/env'
 import { csrfBlocked } from '@/lib/http'
 
 export const dynamic = 'force-dynamic'
@@ -22,7 +24,7 @@ const ActionSchema = z.discriminatedUnion('action', [
 type Ctx = { params: Promise<{ id: string }> }
 
 export async function GET(_req: NextRequest, ctx: Ctx) {
-  const { error } = await requireAdmin()
+  const { error } = await requireAdmin(_req)
   if (error) return error
   const { id } = await ctx.params
 
@@ -74,9 +76,10 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   const csrf = csrfBlocked(req)
   if (csrf) return csrf
 
-  const { user: admin, error } = await requireAdmin()
+  const { user: admin, error } = await requireAdmin(req)
   if (error) return error
   const { id } = await ctx.params
+  const ip = clientIp(req)
 
   const body = await req.json().catch(() => null)
   const parsed = ActionSchema.safeParse(body)
@@ -89,13 +92,16 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     const updated = await db.user.update({ where: { id }, data: { status: 'FROZEN' } })
     // full invalidation: freeze also revokes every session (L3 companion fix)
     await destroyAllUserSessions(id).catch(() => undefined)
+    await logAdminAction({ adminId: admin.id, action: 'USER_FREEZE', targetType: 'user', targetId: id, before: { status: 'ACTIVE' }, after: { status: 'FROZEN' }, ip })
     return NextResponse.json({ ok: true, status: updated.status })
   }
   if (parsed.data.action === 'unfreeze') {
     const updated = await db.user.update({ where: { id }, data: { status: 'ACTIVE' } })
+    await logAdminAction({ adminId: admin.id, action: 'USER_UNFREEZE', targetType: 'user', targetId: id, before: { status: 'FROZEN' }, after: { status: 'ACTIVE' }, ip })
     return NextResponse.json({ ok: true, status: updated.status })
   }
 
   const result = await voidEvents(admin.id, id, parsed.data.eventIds, parsed.data.reason)
+  await logAdminAction({ adminId: admin.id, action: 'POINTS_VOID', targetType: 'user', targetId: id, after: { eventIds: parsed.data.eventIds.slice(0, 50), reason: parsed.data.reason }, ip })
   return NextResponse.json(result)
 }

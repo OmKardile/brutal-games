@@ -3,6 +3,8 @@ import { z } from 'zod'
 import { db } from '@/lib/db'
 import { requireAdmin } from '@/lib/auth/guard'
 import { csrfBlocked } from '@/lib/http'
+import { logAdminAction } from '@/lib/audit'
+import { clientIp } from '@/lib/env'
 
 export const dynamic = 'force-dynamic'
 
@@ -66,8 +68,9 @@ export async function POST(req: NextRequest) {
   const csrf = csrfBlocked(req)
   if (csrf) return csrf
 
-  const { user: admin, error } = await requireAdmin()
+  const { user: admin, error } = await requireAdmin(req)
   if (error) return error
+  const ip = clientIp(req)
 
   const body = await req.json().catch(() => null)
   const parsed = ActionSchema.safeParse(body)
@@ -81,6 +84,7 @@ export async function POST(req: NextRequest) {
           where: { id: input.id },
           data: { pending: false },
         })
+        await logAdminAction({ adminId: admin.id, action: 'BOARD_VERIFY', targetType: 'board', targetId: input.id, after: { pending: false }, ip })
         return NextResponse.json({ ok: true, entry: { id: row.id, pending: row.pending } })
       }
       if (input.action === 'remove') {
@@ -88,6 +92,7 @@ export async function POST(req: NextRequest) {
           where: { id: input.id },
           data: { removedAt: new Date(), removedBy: admin.id, removedReason: input.reason },
         })
+        await logAdminAction({ adminId: admin.id, action: 'BOARD_REMOVE', targetType: 'board', targetId: input.id, after: { reason: input.reason }, ip })
         return NextResponse.json({ ok: true, entry: { id: row.id, removedAt: row.removedAt } })
       }
       const row = await db.highScore.update({
@@ -99,6 +104,7 @@ export async function POST(req: NextRequest) {
 
     if (input.action === 'verify') {
       const row = await db.dailyRun.update({ where: { id: input.id }, data: { pending: false } })
+      await logAdminAction({ adminId: admin.id, action: 'BOARD_VERIFY', targetType: 'board', targetId: input.id, after: { pending: false, board: 'daily' }, ip })
       return NextResponse.json({ ok: true, entry: { id: row.id, pending: row.pending } })
     }
     if (input.action === 'remove') {
@@ -106,6 +112,7 @@ export async function POST(req: NextRequest) {
         where: { id: input.id },
         data: { removedAt: new Date(), removedBy: admin.id, removedReason: input.reason },
       })
+      await logAdminAction({ adminId: admin.id, action: 'BOARD_REMOVE', targetType: 'board', targetId: input.id, after: { reason: input.reason, board: 'daily' }, ip })
       return NextResponse.json({ ok: true, entry: { id: row.id, removedAt: row.removedAt } })
     }
     const row = await db.dailyRun.update({

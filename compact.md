@@ -104,11 +104,12 @@ NEXT_PUBLIC_ANALYTICS_ENDPOINT/SITE (optional), NEXT_PUBLIC_CONSENT_BANNER
   boards fall back to localStorage; daily runs → local UNRANKED. For correct
   absolute sitemap/canonicals set APP_URL to the Pages origin.
 
-## Security program (v0.9.1, active directive)
+## Security program (v0.9.2, active directive)
 - **docs/threat-model.md** is the contract; **docs/anti-cheat.md** is the
   layer architecture + ops runbook; SECURITY.md = operations.
   Phase 1 (audit) DONE. **Phase 2 DONE (v0.8.0)** — ADR-021/022/023.
   **Phase 3 DONE (v0.9.0)** — ADR-024. **Phase 4 DONE (v0.9.1)** — ADR-025.
+  **Phase 5 DONE (v0.9.2)** — ADR-026.
 - Phase 4 shipped: explainable risk score (3/10/25 per flag type, confirmed
   x2; bands 15=MEDIUM review, 40=HIGH auto-HOLD — pending entries + payout
   block, never bans); top-3 + HIGH-risk entries pending verification (admin
@@ -133,15 +134,21 @@ NEXT_PUBLIC_ANALYTICS_ENDPOINT/SITE (optional), NEXT_PUBLIC_CONSENT_BANNER
   display-only; guests = local board); account-callsign board names
   (nameKey unique + policy); /api/auth/sessions + /api/auth/profile; deps
   pruned -21; SECURITY.md.
-- Still open from the audit: H2 headers (phase 6), H5 admin 2FA/audit/self-
-  approval (phase 5), H8 payout races (phase 5), M7 monitoring/runbook
-  (phase 6), M8 hygiene (partial: deps done, gitleaks/audit cadence phase 8),
-  M9 payouts kill switch (phase 5), L1 dead /api route (phase 6). Account
+- Phase 5 shipped: transactional payout create/approve (idempotency keys,
+  in-tx re-checks, concurrent double-spend dead); mandatory admin TOTP 2FA
+  (RFC 6238 node:crypto-only, AES-GCM at rest, forced enrollment) + 1h
+  SameSite=Strict admin-session cookie + optional ADMIN_IP_ALLOWLIST;
+  append-only AdminAudit on every admin mutation (AUDIT tab); self-approval
+  blocked; optional two-person rule (TWO_PERSON_THRESHOLD_MINOR, default 0);
+  REWARDS_PAYOUTS_PAUSED kill switch (runtime-flippable toggle);
+  monthlyReconciliation + GET /api/admin/reconciliation.
+- Still open from the audit: H2 headers (phase 6), M7 alerts/runbook
+  (phase 6; reconciliation itself is live), M8 hygiene (partial: deps done,
+  gitleaks/audit cadence phase 8), L1 dead /api route (phase 6). Account
   deletion deferred (payout records must outlive accounts — phase 6 docs).
 - Caddyfile ships a dev-only `?XTransformPort=` open local-proxy handler —
   must never reach production (phase 6 ships a hardened template).
 - Next phases (each: docs+CHANGELOG+tests, then WAIT FOR OK):
-  5 payout integrity/admin 2FA+audit/kill switch/reconciliation →
   6 headers/Caddy/backups/monitoring/runbook → 7 replay (deferred) →
   8 abuse-test suite + scans + red-team.
 - REWARDS_ENABLED stays FALSE until phases 2-6 + 8 pass (ADR-020).

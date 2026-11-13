@@ -32,6 +32,9 @@ export default function LoginPage() {
   // server tells us to present a captcha after repeated failures
   const [captchaRequired, setCaptchaRequired] = useState(false)
   const [turnstileToken, setTurnstileToken] = useState<string | undefined>(undefined)
+  // admin accounts need a 2FA code once TOTP is enrolled
+  const [totpRequired, setTotpRequired] = useState(false)
+  const [totpCode, setTotpCode] = useState('')
 
   useEffect(() => {
     void fetch('/api/rewards/config', { cache: 'no-store' })
@@ -58,10 +61,12 @@ export default function LoginPage() {
           password,
           signals: collectSignals(),
           ...(captchaRequired && turnstileToken ? { turnstileToken } : {}),
+          ...(totpRequired && /^\d{6}$/.test(totpCode) ? { totpCode } : {}),
         }),
       })
-      const data = (await res.json()) as { error?: string; captchaRequired?: boolean }
+      const data = (await res.json()) as { error?: string; captchaRequired?: boolean; totpRequired?: boolean }
       if (data.captchaRequired) setCaptchaRequired(true)
+      if (data.totpRequired) setTotpRequired(true)
       if (!res.ok) {
         setError(data.error ?? 'Login failed.')
         return
@@ -110,6 +115,17 @@ export default function LoginPage() {
               className="h-11 border-red-900/60 bg-black/60 tracking-wide placeholder:text-stone-700 focus-visible:ring-red-500"
               aria-label="Password"
             />
+            {totpRequired && (
+              <Input
+                value={totpCode}
+                onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="2FA CODE (ADMIN)"
+                inputMode="numeric"
+                maxLength={6}
+                className="h-11 border-amber-900/60 bg-black/60 tracking-[0.4em] placeholder:text-stone-700 focus-visible:ring-amber-500"
+                aria-label="TOTP code"
+              />
+            )}
             {captchaRequired && siteKey && (
               <Turnstile siteKey={siteKey} onToken={setTurnstileToken} />
             )}

@@ -9,6 +9,8 @@ import {
   dummyVerify,
 } from '@/lib/auth/password'
 import { createSession, sessionCookieOptions, SESSION_COOKIE } from '@/lib/auth/session'
+import { decryptSecret, verifyTotp } from '@/lib/auth/totp'
+import { issueAdminToken, adminCookieOptions, ADMIN_COOKIE } from '@/lib/auth/admin-session'
 import {
   limit,
   tooMany,
@@ -27,6 +29,8 @@ export const dynamic = 'force-dynamic'
 const LoginSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(200),
   password: z.string().min(1).max(200),
+  /** 6-digit TOTP code — required for ADMIN accounts with 2FA enabled */
+  totpCode: z.string().regex(/^\d{6}$/).optional(),
   turnstileToken: z.string().optional(),
   signals: z.record(z.string(), z.unknown()).optional(),
 })
@@ -48,7 +52,7 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: 'Invalid login payload.' }, { status: 400 })
   }
-  const { email, password, turnstileToken, signals } = parsed.data
+  const { email, password, totpCode, turnstileToken, signals } = parsed.data
 
   // per-account AND per-IP lockout with exponential backoff (M5 fix)
   const acctKey = `loginfail:acct:${email}`
@@ -111,6 +115,24 @@ export async function POST(req: NextRequest) {
   await Promise.all([clearFailures(acctKey), clearFailures(ipKey)])
   await db.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } })
 
+  // ADMIN accounts: password alone is never enough once 2FA is live.
+  // Without an enabled secret we still log in — but requireAdmin forces
+  // enrollment before any admin action (the admin token below only unlocks
+  // the TOTP setup/enable routes until then).
+  let adminToken: { token: string; expiresAt: Date } | null = null
+  if (user.role === 'ADMIN') {
+    if (user.totpSecret && user.totpEnabledAt) {
+      const secret = decryptSecret(user.totpSecret)
+      if (!secret || !verifyTotp(secret, totpCode ?? '')) {
+        return NextResponse.json(
+          { error: 'Wrong or missing 2FA code.', totpRequired: true },
+          { status: 401 },
+        )
+      }
+    }
+    adminToken = issueAdminToken(user.id)
+  }
+
   try {
     const settings = await getSettings()
     await registerDevice(user.id, { userAgent: ua, ...signals }, ip, settings)
@@ -129,5 +151,8 @@ export async function POST(req: NextRequest) {
     },
   })
   res.cookies.set(SESSION_COOKIE, session.token, sessionCookieOptions(session.expiresAt))
+  if (adminToken) {
+    res.cookies.set(ADMIN_COOKIE, adminToken.token, adminCookieOptions(adminToken.expiresAt))
+  }
   return res
 }

@@ -5,6 +5,8 @@ import { requireAdmin } from '@/lib/auth/guard'
 import { getSettings } from '@/lib/rewards/config'
 import { lockMonth } from '@/lib/rewards/payouts'
 import { csrfBlocked } from '@/lib/http'
+import { logAdminAction } from '@/lib/audit'
+import { clientIp } from '@/lib/env'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,8 +38,9 @@ export async function POST(req: NextRequest) {
   const csrf = csrfBlocked(req)
   if (csrf) return csrf
 
-  const { user: admin, error } = await requireAdmin()
+  const { user: admin, error } = await requireAdmin(req)
   if (error) return error
+  const ip = clientIp(req)
 
   const body = await req.json().catch(() => null)
   const parsed = SaveSchema.safeParse(body).success
@@ -66,6 +69,15 @@ export async function POST(req: NextRequest) {
         enteredBy: admin.id,
       },
     })
+    await logAdminAction({
+      adminId: admin.id,
+      action: 'POOL_SAVE',
+      targetType: 'pool',
+      targetId: parsed.month,
+      before: existing ? { netRevenueMinor: existing.netRevenueMinor, sharePercent: existing.sharePercent } : null,
+      after: { netRevenueMinor: parsed.netRevenueMinor, sharePercent: parsed.sharePercent },
+      ip,
+    })
     return NextResponse.json({ pool })
   }
 
@@ -73,5 +85,13 @@ export async function POST(req: NextRequest) {
   const settings = await getSettings()
   const result = await lockMonth(admin.id, parsed.month, settings)
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 409 })
+  await logAdminAction({
+    adminId: admin.id,
+    action: 'POOL_LOCK',
+    targetType: 'pool',
+    targetId: parsed.month,
+    after: { poolAmountMinor: result.computation?.poolAmountMinor ?? 0 },
+    ip,
+  })
   return NextResponse.json({ ok: true, computation: result.computation })
 }
