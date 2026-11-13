@@ -167,6 +167,10 @@ untrusted. Since v0.8 (hardening phase 2):
   [docs/incident-runbook.md](docs/incident-runbook.md).
 
 A fan tribute, not affiliated with ahwoo. Rewards payouts involve real money and require
-legal/tax review before going live — see business-documentation.md. Security hardening
-is in progress per [docs/threat-model.md](docs/threat-model.md); `REWARDS_ENABLED` stays
-off until the phased plan's gates pass.
+legal/tax review before going live — see business-documentation.md. The security-hardening
+program's engineering gates are ALL GREEN (phases 2-6 + 8: auth hardening, signed run
+tokens, risk scoring + moderation, transactional payouts, admin 2FA + audit, kill
+switches, security headers, incident runbook, and a 26-attack HTTP abuse suite —
+[docs/threat-model.md](docs/threat-model.md)); `REWARDS_ENABLED` stays off pending the
+program's own go/no-go. Replay verification (phase 7) is deferred until the engines are
+deterministic — documented, not faked.

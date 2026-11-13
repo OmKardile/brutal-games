@@ -3,6 +3,39 @@
 All notable changes to BRUTAL//GAMES. Dates are UTC. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions are ours, not semver-strict.
 
+## [0.10.1] — 2026-11-13
+
+### Security — hardening program phase 8 (abuse suite, scans, red team) — the final gate
+
+`REWARDS_ENABLED` stays false by decision; every technical gate from the
+threat model (phases 2-6 + 8) is now GREEN. Rationale: ADR-028.
+
+**The abuse suite (`tests/security/abuse-suite.test.ts`)**
+- Boots the REAL standalone build against a throwaway DB and fires 26
+  attacks from the threat catalogue over HTTP: forged/replayed/tampered run
+  tokens, impossible scores, daily seed mismatch, heartbeat flood/replay,
+  CSRF (foreign origin + form-encoded), admin-surface probes (player,
+  no-session, no-2FA), callsign poisoning, UPI pooling, payout gating,
+  login brute force, IP rotation, XFF spoofing, user enumeration, oversized
+  and malformed payloads. Every attack is asserted to FAIL SAFELY.
+- **It caught a real bug:** the scores route's zod schema capped
+  `runToken` at 200 chars while signed tokens are ~250 — every ranked
+  submission would have failed validation. Fixed (1024) + regression cover.
+
+**Scans + hygiene**
+- Pre-commit secret scan installed (`.githooks/pre-commit`; gitleaks
+  documented for full-history scans — current repo + history scanned clean).
+- Dependabot config (weekly npm/actions/docker groups).
+- `bun audit`: 89 findings, all in dev toolchains (eslint chains); the
+  production-relevant `zod` updated to a fixed version; runtime surface
+  clean.
+- Manual red-team pass executed and logged in docs/anti-cheat.md (25 attack
+  classes, all mitigated; residual risks restated honestly).
+- OWASP ZAP baseline + Mozilla Observatory documented as deploy-time steps
+  (they need a public URL) in SECURITY.md.
+
+**Tests**: 225 pass (was 199) — +26 abuse-suite attacks + regression cover.
+
 ## [0.10.0] — 2026-11-13
 
 ### Security — hardening program phase 6 (headers, infra, monitoring, runbook)

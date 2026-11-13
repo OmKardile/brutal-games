@@ -104,12 +104,14 @@ NEXT_PUBLIC_ANALYTICS_ENDPOINT/SITE (optional), NEXT_PUBLIC_CONSENT_BANNER
   boards fall back to localStorage; daily runs → local UNRANKED. For correct
   absolute sitemap/canonicals set APP_URL to the Pages origin.
 
-## Security program (v0.10.0, active directive)
+## Security program (v0.10.1, COMPLETE)
 - **docs/threat-model.md** is the contract; **docs/anti-cheat.md** is the
   layer architecture + ops runbook; SECURITY.md = operations.
   Phase 1 (audit) DONE. **Phase 2 DONE (v0.8.0)** — ADR-021/022/023.
   **Phase 3 DONE (v0.9.0)** — ADR-024. **Phase 4 DONE (v0.9.1)** — ADR-025.
   **Phase 5 DONE (v0.9.2)** — ADR-026. **Phase 6 DONE (v0.10.0)** — ADR-027.
+  **Phase 8 DONE (v0.10.1)** — ADR-028. ALL ENGINEERING GATES GREEN
+  (2-6 + 8; phase 7 replay stays deferred until deterministic engines).
 - Phase 4 shipped: explainable risk score (3/10/25 per flag type, confirmed
   x2; bands 15=MEDIUM review, 40=HIGH auto-HOLD — pending entries + payout
   block, never bans); top-3 + HIGH-risk entries pending verification (admin
@@ -158,9 +160,18 @@ NEXT_PUBLIC_ANALYTICS_ENDPOINT/SITE (optional), NEXT_PUBLIC_CONSENT_BANNER
   records must outlive accounts — runbook documents the purge/export path).
 - Caddyfile ships a dev-only `?XTransformPort=` open local-proxy handler —
   must never reach production (phase 6 ships a hardened template).
-- Next phases (each: docs+CHANGELOG+tests, then WAIT FOR OK):
-  8 abuse-test suite + scans + red-team (the last gate before rewards can
-  be considered for enablement; phase 7 replay stays deferred by design).
+- Phase 8 shipped: tests/security/abuse-suite.test.ts — boots the real
+  standalone build on a throwaway DB and fires 26 threat-catalogue attacks
+  over HTTP, all asserted to fail safely (TRUSTED_PROXY=1 lets each test
+  control its client IP). Caught + fixed a REAL bug (scores route capped
+  runToken at 200 chars vs ~250-char signed tokens — ranked submissions
+  would have all failed). Pre-commit secret scan (.githooks/pre-commit;
+  repo + full history scanned clean), Dependabot (.github/dependabot.yml),
+  bun audit triaged (89 dev-chain findings; production zod updated), manual
+  red-team pass logged in docs/anti-cheat.md (25 attack classes mitigated).
+- REWARDS_ENABLED stays FALSE by decision; enabling awaits the program's
+  go/no-go + legal/tax sign-off (business-documentation.md) — the
+  engineering gates are complete.
 - REWARDS_ENABLED stays FALSE until phases 2-6 + 8 pass (ADR-020).
 - Standing rules: localStorage never carries value; server clock decides
   durations; authz only in route handlers (no middleware exists — keep it);

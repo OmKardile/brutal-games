@@ -1,0 +1,23 @@
+# Dependabot (phase 8 dev hygiene): weekly dependency bump PRs.
+# bun.lock is understood via the npm ecosystem + bun vendoring; review each
+# PR against SECURITY.md's checklist (no new deps without need).
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: monthly

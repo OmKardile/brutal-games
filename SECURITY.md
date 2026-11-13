@@ -28,10 +28,12 @@ effort on client obfuscation.
 | Ledger & pools | append-only `PointEvent` ledger, unique idempotency keys, one-reversal-per-original, LOCKED-pool immutable snapshots, hold periods | `src/lib/rewards/*` (pre-existing, tested) |
 | Fraud | flag-only signals (duplicate device/IP, VPN list, headless UA, anomalies) into a manual review queue — never auto-ban | `src/lib/rewards/fraud.ts` |
 
-Landed next (phases 3-8, see threat model §7): HMAC-signed run tokens with
-key rotation, heartbeat nonce chains, statistical anomaly flags, risk scoring +
-auto-HOLD, payout transactionality + admin TOTP/audit log + payout kill
-switch, security headers + hardened Caddy template, abuse-test suite.
+All phases shipped (0.8.0 → 0.10.1): signed run tokens with key rotation,
+heartbeat hash-chain challenges, plausibility + statistical flags, risk
+scoring with auto-HOLD + pending verification + board moderation, payout
+transactionality + gating + admin TOTP 2FA/audit log + kill switches,
+security headers + hardened Caddy template + incident runbook, and the
+HTTP-level abuse suite (26 attacks, all failing safely).
 
 ## Security review checklist (every PR that touches auth/money/api)
 
@@ -46,6 +48,20 @@ switch, security headers + hardened Caddy template, abuse-test suite.
 - [ ] Privacy: collect minimum; hash what you don't need raw
 - [ ] `bun test` green; abuse cases for new endpoints added (tests/security/)
 - [ ] Affected docs updated (threat model + technical docs + CHANGELOG)
+
+## Scans + review cadence
+
+- **Pre-commit secret scan:** `.githooks/pre-commit` (installed via
+  `git config core.hooksPath .githooks`); gitleaks for full-history scans —
+  repo + history currently clean.
+- **Dependency updates:** Dependabot (`.github/dependabot.yml`, weekly);
+  review bump PRs against the checklist above. Run `bun audit` before
+  releases; triage: runtime deps get patched immediately, dev-toolchain
+  findings ride the weekly train.
+- **Deploy-time (need a public URL):** OWASP ZAP baseline scan +
+  Mozilla Observatory against the live origin after every infra change.
+- **Abuse regression:** `bun run build && bun test tests/security/` before
+  any change that touches auth, scores, payouts or the run-token flow.
 
 ## Reporting a vulnerability
 

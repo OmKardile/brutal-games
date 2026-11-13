@@ -148,3 +148,50 @@ real incidents only.
   damage.
 - The statistical layer needs population history; on day one of a new game's
   board it is quiet by design.
+
+## Manual red-team log (phase 8, 2026-11-13)
+
+Live attacks attempted against the running production build (localhost,
+TRUSTED_PROXY unset/1 as noted), in addition to the automated
+`tests/security/abuse-suite.test.ts`:
+
+| # | Attack attempted | Result |
+|---|---|---|
+| 1 | `curl POST /api/scores` with a 100M score, no session | 401 — guests cannot post; client falls back to a local board |
+| 2 | Logged-in forged score, no run token | Stored display-only; excluded from the ranked board + totals |
+| 3 | Tampered run-token payload (signature no longer matches) | Offline HMAC rejection — never ranks |
+| 4 | Replayed a consumed run token | Second submission display-only (token burned) |
+| 5 | Score implausible for the server-measured duration | 422 rejected (manifest ceiling vs SIGNED startedAt) |
+| 6 | Daily run with a mismatched / missing token | ranked=false — top-3 requires the seed-bound single-use claim |
+| 7 | Heartbeat farm without reading responses (no challenge echo) | 409 BAD_CHALLENGE on every beat — zero points |
+| 8 | Heartbeat replay (old challenge) | 409 — challenge rotated server-side |
+| 9 | Heartbeat flood (12 rapid beats) | All 400/409/429 — nothing earned; burst guard holds |
+| 10 | Cross-origin POST (evil.example) | 403 CSRF block |
+| 11 | Form-encoded POST | 415 content-type rejection |
+| 12 | Admin routes as a player / with no session | 403 / 401 |
+| 13 | Admin login without a 2FA code (after enrollment) | 401 totpRequired |
+| 14 | Admin console without 2FA enrollment | Forced-enrollment gate (TOTP_SETUP_REQUIRED on every route) |
+| 15 | Self-approval of own payout | 403 SELF_APPROVAL |
+| 16 | Concurrent double payout requests (parallel) | Exactly one reservation — transaction + balance re-check |
+| 17 | Idempotency-key replay of a payout request | Original request returned; no double reservation |
+| 18 | Login brute force (7 wrong passwords) | 429 lockout after 5, exponential backoff |
+| 19 | IP rotation to dodge lockout (7 different XFFs, one account) | ACCOUNT bucket locks anyway |
+| 20 | Spoofed X-Forwarded-For with TRUSTED_PROXY unset | Ignored — all clients share the 'direct' bucket |
+| 21 | User-enumeration probe (unknown vs wrong password) | Identical error + equalized KDF timing |
+| 22 | Impersonation ("ADMIN", leetspeak variants) as callsign | Name policy rejects |
+| 23 | UPI pooling (same destination on two accounts) | 409 + UPI_REUSE flag |
+| 24 | XSS payload in display name | Names are sanitized text everywhere; no innerHTML on user content; CSP caps the rest |
+| 25 | Oversized / malformed JSON bodies | zod length caps reject; garbage JSON 400 |
+
+**Found and fixed during this pass:** the automated suite caught a real
+production bug — the scores route's zod schema capped `runToken` at 200
+chars while signed run tokens are ~250, which would have made EVERY ranked
+score submission fail validation. Fixed (cap 1024) and covered by a test.
+
+**What still works against us (documented residuals):** a patient attacker
+with a real browser session CAN earn the daily cap honestly on N accounts —
+the counter-measures are economic (cooling, 72h/3-day payout gates, UPI
+uniqueness, risk holds, per-account cap) not absolute. Plausible-but-fake
+scores within manifest ceilings remain possible (Layer D deferred) — they
+are flagged statistically and top-3 entries wait for verification. See the
+threat model's residual-risk register.

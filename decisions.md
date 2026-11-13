@@ -452,3 +452,36 @@ the remaining infrastructure findings.
 on the dynamic deploy; GitHub-Pages static export inherits no headers
 (nothing to protect there — no API). Alert delivery depends on setting
 ALERT_WEBHOOK_URL (runbook §9).
+
+## ADR-028 — Abuse-test suite, scans, red team (phase 8)
+
+Date: 2026-11-13 · Status: accepted (phase 8)
+
+**Context.** The threat model's final gate: prove the shipped layers FAIL
+SAFELY under real attacks before `REWARDS_ENABLED` may ever be considered.
+
+**Decision.**
+1. `tests/security/abuse-suite.test.ts`: an HTTP-level suite that boots the
+   real standalone build against a throwaway DB (TRUSTED_PROXY=1 so each
+   test controls its client IP via X-Forwarded-For) and fires 26 attacks
+   from the threat catalogue: forged/replayed/tampered tokens, impossible
+   scores, seed mismatch, heartbeat flood/replay, CSRF, form-encoded posts,
+   admin-surface probes (player/no-session/no-2FA), name poisoning, UPI
+   pooling, payout gating, brute force, IP rotation, XFF spoofing,
+   enumeration, oversized payloads. Every attack must fail safely.
+2. Pre-commit secret scan (.githooks/pre-commit; gitleaks documented for
+   full-history scans) + Dependabot (.github/dependabot.yml) + `bun audit`
+   (89 findings triaged: all in dev toolchains — eslint chains; production
+   zod updated; runtime surface clean).
+3. Manual red-team pass executed and logged in docs/anti-cheat.md (25 attack
+   classes, all mitigated; the automated suite caught one REAL bug — the
+   scores route capped runToken at 200 chars vs ~250-char signed tokens,
+   which would have broken every ranked submission — fixed + regression-
+   tested).
+
+**Consequences.** The suite requires `bun run build` first (standalone
+server) and runs the full stack honestly. OWASP ZAP baseline + Mozilla
+Observatory are documented as deploy-time steps (they need a public URL).
+Phases 2-6 + 8 are complete; phase 7 (replay verification) stays deferred
+until deterministic engines. Rewards enablement now awaits only the
+program's own decision, with legal/tax sign-off (business-documentation).

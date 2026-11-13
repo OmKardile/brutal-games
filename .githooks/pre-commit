@@ -1,0 +1,31 @@
+#!/bin/sh
+# Lightweight secret scan (phase 8) — a speed bump, not a replacement for
+# gitleaks. Install once: git config core.hooksPath .githooks
+# For full-history scanning use gitleaks (see SECURITY.md).
+set -e
+
+# patterns: AWS keys, GitHub tokens, Google API keys, Slack, OpenAI-style,
+# private key headers, and long hex/base64 "secrets" assigned to suspicious var names
+PATTERNS='(
+AKIA[0-9A-Z]{16}|
+ghp_[A-Za-z0-9]{36}|
+gho_[A-Za-z0-9]{36}|
+xox[baprs]-[A-Za-z0-9-]{10,}|
+AIza[0-9A-Za-z_-]{35}|
+sk-[A-Za-z0-9]{20,}|
+-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|
+(SECRET|TOKEN|PASSWORD|API_KEY)[A-Z_]*\s*[:=]\s*["'"'"'][A-Za-z0-9+/_-]{32,}["'"'"']
+)'
+
+FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -vE '\.(png|jpg|jpeg|webp|ico|woff2?|ttf)$' || true)
+if [ -z "$FILES" ]; then
+  exit 0
+fi
+
+if echo "$FILES" | xargs grep -nE "$PATTERNS" 2>/dev/null; then
+  echo ""
+  echo "BLOCKED: staged changes look like they contain secrets."
+  echo "If this is a false positive, scan with: git commit --no-verify"
+  exit 1
+fi
+exit 0

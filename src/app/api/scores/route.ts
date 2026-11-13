@@ -20,7 +20,7 @@ const ScoreSchema = z.object({
   wave: z.number().int().min(0).max(10_000),
   kills: z.number().int().min(0).max(1_000_000),
   game: z.enum(GAMES).optional().default('arena'),
-  runToken: z.string().min(20).max(200).optional(),
+  runToken: z.string().min(20).max(1024).optional(),
 })
 
 function gameFromRequest(req: NextRequest): Game | null {

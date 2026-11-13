@@ -151,7 +151,7 @@ behind a reverse proxy; headers ignored otherwise).
 
 ## Testing
 
-`bun test tests/` — 199 tests. `payout-math.test.ts` (pure edge cases: zero revenue,
+`bun test tests/` — 225 tests. `payout-math.test.ts` (pure edge cases: zero revenue,
 zero points, caps, rounding residue, thresholds), `ledger.test.ts` (real temp SQLite DB:
 idempotency, daily-cap clamps, streaks, reversal semantics, month clamping, gates),
 `rewards-logic.test.ts` (heartbeat timing, run plausibility, IST boundaries, IP/CIDR
@@ -160,7 +160,7 @@ matching, fingerprint stability, challenge determinism), `auth-hardening.test.ts
 backoff math), `rate-limit.test.ts` (persistent sliding window, restart persistence,
 lockout state machine), `scores-service.test.ts` (ranked-with-token, replay burn,
 foreign/mismatched/aborted tokens, implausible scores, callsign claims,
-ranked-only boards), `anti-cheat.test.ts` (token signing/rotation/tamper, heartbeat challenge chain + replay/forgery, entropy/drift, daily seed claims, statistical classification), `risk-boards.test.ts` (risk bands, pending/moderation flows, cooling, payout gating, UPI constraint, HMAC privacy), `payout-integrity.test.ts` (RFC 6238 vectors, admin-token crypto, concurrent double-spend, idempotency, self-approval, two-person, kill switch, reconciliation, audit).
+ranked-only boards), `anti-cheat.test.ts` (token signing/rotation/tamper, heartbeat challenge chain + replay/forgery, entropy/drift, daily seed claims, statistical classification), `risk-boards.test.ts` (risk bands, pending/moderation flows, cooling, payout gating, UPI constraint, HMAC privacy), `payout-integrity.test.ts` (RFC 6238 vectors, admin-token crypto, concurrent double-spend, idempotency, self-approval, two-person, kill switch, reconciliation, audit), `tests/security/abuse-suite.test.ts` (the phase-8 gate: boots the real standalone build on a throwaway DB and fires 26 threat-catalogue attacks over HTTP — forged/replayed/tampered tokens, impossible scores, heartbeat flood/replay, CSRF, admin probes, name poisoning, UPI pooling, brute force, IP rotation, XFF spoofing, oversized payloads — all asserted to fail safely).
 
 ## Operations
 

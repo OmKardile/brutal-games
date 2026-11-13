@@ -5,7 +5,7 @@ changed in this phase. Audit basis: clean tree at `df2716a`, v0.7.0, 102/102
 tests green. Every claim below was verified against the current source in
 Nov 2026; file references are live code paths.
 
-> **STATUS UPDATE — phases 2-6 SHIPPED (v0.8.0 → v0.10.0):**
+> **STATUS UPDATE — phases 2-6 + 8 SHIPPED (v0.8.0 → v0.10.1): ALL GATES GREEN.**
 > Phase 2 fixed C1, C3, H1, H6, H7, M2, M5, L2, L3 (argon2id + login
 > lockout/escalation, persistent SQLite rate limiting, trusted-proxy clientIp,
 > CSRF baseline on all mutations, fail-hard production secrets, /api/scores
