@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { StackGame, type StackEvent, type StackStats } from '@/game/stack'
 import { subscribeGamepads } from '@/game/gamepad'
+import { useTheme } from '@/lib/theme'
+import { ThemeToggle } from '@/components/ThemeToggle'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -41,6 +43,7 @@ export default function StackPage() {
   const statsRef = useRef<StackStats | null>(null)
 
   const { toast } = useToast()
+  const { theme } = useTheme()
 
   const [phase, setPhase] = useState<PagePhase>('menu')
   const [score, setScore] = useState(0)
@@ -132,6 +135,7 @@ export default function StackPage() {
       }
     })
     engineRef.current = engine
+    engine.setTheme(theme)
     setName(recallPlayerName())
     try {
       const b = Number(window.localStorage.getItem('brutal.stack.best'))
@@ -155,6 +159,11 @@ export default function StackPage() {
       setPadId(id)
     })
   }, [])
+
+  // live NIGHT/DAY switch — engine re-renders with the new palette next frame
+  useEffect(() => {
+    engineRef.current?.setTheme(theme)
+  }, [theme])
 
   const start = useCallback(() => {
     engineRef.current?.start()
@@ -244,11 +253,11 @@ export default function StackPage() {
       <tbody>
         {entries.map((e, i) => (
           <tr key={e.id} className="border-b border-red-950/40 last:border-0">
-            <td className="py-1.5 pr-2 text-stone-600">{String(i + 1).padStart(2, '0')}</td>
-            <td className="py-1.5 pr-2 font-bold text-stone-200">{e.name}</td>
+            <td className="py-1.5 pr-2 text-[var(--ink-faint)]">{String(i + 1).padStart(2, '0')}</td>
+            <td className="py-1.5 pr-2 font-bold text-[var(--ink)]">{e.name}</td>
             <td className="py-1.5 text-right text-amber-500">{e.score}</td>
-            <td className="py-1.5 pl-3 text-right text-stone-500">{e.wave} ALT</td>
-            <td className="py-1.5 pl-3 text-right text-stone-500">{e.kills} P</td>
+            <td className="py-1.5 pl-3 text-right text-[var(--ink-dim)]">{e.wave} ALT</td>
+            <td className="py-1.5 pl-3 text-right text-[var(--ink-dim)]">{e.kills} P</td>
           </tr>
         ))}
       </tbody>
@@ -256,7 +265,7 @@ export default function StackPage() {
   )
 
   return (
-    <main className="relative h-dvh w-full select-none overflow-hidden bg-[#070709] font-mono text-stone-200">
+    <main className="relative h-dvh w-full select-none overflow-hidden bg-[var(--bg)] font-mono text-[var(--ink)]">
       <canvas
         ref={canvasRef}
         className="absolute inset-0 block h-full w-full touch-none"
@@ -267,7 +276,7 @@ export default function StackPage() {
       {phase === 'playing' && (
         <>
           <div className="pointer-events-none absolute left-1/2 top-4 z-10 -translate-x-1/2 text-center">
-            <div className="text-5xl font-black tabular-nums tracking-tighter text-stone-100 md:text-6xl">
+            <div className="text-5xl font-black tabular-nums tracking-tighter text-[var(--ink)] md:text-6xl">
               {String(score).padStart(3, '0')}
             </div>
             {streak >= 2 && (
@@ -276,15 +285,16 @@ export default function StackPage() {
               </div>
             )}
             {score < 2 && (
-              <div className="mt-2 text-[10px] tracking-[0.35em] text-stone-500">
+              <div className="mt-2 text-[10px] tracking-[0.35em] text-[var(--ink-dim)]">
                 TAP / SPACE / PAD — DROP
               </div>
             )}
           </div>
           <div className="absolute right-3 top-3 z-20 flex gap-2">
+            <ThemeToggle className="h-9 w-16" />
             {padConnected && (
               <div
-                className="flex h-9 items-center gap-1.5 rounded border border-amber-800/60 bg-black/50 px-2.5 text-[9px] tracking-widest text-amber-400"
+                className="flex h-9 items-center gap-1.5 rounded border border-amber-800/60 bg-[var(--panel)] px-2.5 text-[9px] tracking-widest text-amber-400"
                 title={padId || 'gamepad connected'}
               >
                 <Gamepad2 className="h-3.5 w-3.5" />
@@ -294,7 +304,7 @@ export default function StackPage() {
             <Button
               size="icon"
               variant="outline"
-              className="h-9 w-9 border-red-900/60 bg-black/50 text-stone-300 hover:bg-red-950/60 hover:text-red-400"
+              className="h-9 w-9 border-red-900/60 bg-[var(--panel)] text-[var(--ink-dim)] hover:bg-red-950/60 hover:text-red-400"
               onClick={toggleMute}
               aria-label={muted ? 'Unmute' : 'Mute'}
             >
@@ -302,8 +312,8 @@ export default function StackPage() {
             </Button>
           </div>
           {best > 0 && (
-            <div className="pointer-events-none absolute left-3 top-4 z-10 text-[10px] tracking-[0.3em] text-stone-600">
-              BEST <span className="text-stone-400">{best}</span>
+            <div className="pointer-events-none absolute left-3 top-4 z-10 text-[10px] tracking-[0.3em] text-[var(--ink-faint)]">
+              BEST <span className="text-[var(--ink-dim)]">{best}</span>
             </div>
           )}
         </>
@@ -311,12 +321,12 @@ export default function StackPage() {
 
       {/* ------------------------------------------------------- MENU */}
       {phase === 'menu' && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center overflow-y-auto bg-gradient-to-b from-black/70 via-black/50 to-black/80 px-4 py-8">
+        <div className="absolute inset-0 z-10 flex items-center justify-center overflow-y-auto bg-[var(--overlay)] px-4 py-8">
           <div className="w-full max-w-3xl">
             <div className="text-center">
               <Link
                 href="/"
-                className="mx-auto mb-4 inline-flex items-center gap-1.5 rounded border border-stone-800/80 bg-black/70 px-3 py-1.5 text-[10px] tracking-[0.3em] text-stone-400 transition-colors hover:border-red-800 hover:text-red-400"
+                className="mx-auto mb-4 inline-flex items-center gap-1.5 rounded border border-[var(--line-strong)] bg-[var(--overlay)] px-3 py-1.5 text-[10px] tracking-[0.3em] text-[var(--ink-dim)] transition-colors hover:border-red-800 hover:text-red-400"
               >
                 <ArrowLeft className="h-3 w-3" /> BACK TO SITE
               </Link>
@@ -329,32 +339,32 @@ export default function StackPage() {
                 </span>
                 <span className="relative text-red-500">STACK</span>
               </h1>
-              <p className="mt-2 text-[11px] tracking-[0.35em] text-stone-400 md:text-xs">
+              <p className="mt-2 text-[11px] tracking-[0.35em] text-[var(--ink-dim)] md:text-xs">
                 ONE TAP · STACK IT PERFECT · GROW IT BACK
               </p>
             </div>
 
             {/* stats + rules card */}
-            <div className="mt-6 rounded border border-amber-900/50 bg-black/60 p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2 text-xs tracking-widest text-stone-400">
+            <div className="mt-6 rounded border border-amber-900/50 bg-[var(--panel)] p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs tracking-widest text-[var(--ink-dim)]">
                 <div className="flex items-center gap-2">
                   <Trophy className="h-4 w-4 text-amber-500" /> LOCAL RECORDS
                 </div>
-                <div className="text-[10px] tracking-widest text-stone-500">
+                <div className="text-[10px] tracking-widest text-[var(--ink-dim)]">
                   BEST HEIGHT <span className="text-amber-400">{best}</span> · BEST STREAK{' '}
                   <span className="text-amber-400">×{bestStreak}</span>
                 </div>
               </div>
-              <div className="mt-3 grid gap-1.5 text-[11px] leading-relaxed text-stone-400 md:grid-cols-3">
-                <div className="rounded border border-stone-800 bg-black/50 px-2.5 py-2">
+              <div className="mt-3 grid gap-1.5 text-[11px] leading-relaxed text-[var(--ink-dim)] md:grid-cols-3">
+                <div className="rounded border border-[var(--line)] bg-[var(--panel)] px-2.5 py-2">
                   <span className="text-red-400">TAP / SPACE / PAD BUTTON</span> — drop the block.
                   The overhang gets sliced off.
                 </div>
-                <div className="rounded border border-stone-800 bg-black/50 px-2.5 py-2">
+                <div className="rounded border border-[var(--line)] bg-[var(--panel)] px-2.5 py-2">
                   <span className="text-amber-400">PERFECT DROPS</span> — stack 3+ in a row and the
                   tower regrows wider.
                 </div>
-                <div className="rounded border border-stone-800 bg-black/50 px-2.5 py-2">
+                <div className="rounded border border-[var(--line)] bg-[var(--panel)] px-2.5 py-2">
                   <span className="text-red-400">MISS THE TOWER</span> — run over. Tap to restart
                   instantly.
                 </div>
@@ -372,26 +382,26 @@ export default function StackPage() {
               </Button>
               <Link
                 href="/play"
-                className="inline-flex items-center gap-1.5 text-[11px] tracking-[0.25em] text-stone-500 transition-colors hover:text-red-400"
+                className="inline-flex items-center gap-1.5 text-[11px] tracking-[0.25em] text-[var(--ink-dim)] transition-colors hover:text-red-400"
               >
                 <Swords className="h-3.5 w-3.5" /> PREFER GUNS? ENTER THE ARENA
               </Link>
             </div>
 
             {/* leaderboard */}
-            <div className="mt-6 rounded border border-red-950/80 bg-black/60 p-4">
-              <div className="mb-3 flex items-center justify-between text-xs tracking-widest text-stone-400">
+            <div className="mt-6 rounded border border-red-950/80 bg-[var(--panel)] p-4">
+              <div className="mb-3 flex items-center justify-between text-xs tracking-widest text-[var(--ink-dim)]">
                 <div className="flex items-center gap-2">
                   <Layers className="h-4 w-4 text-red-500" /> STACK — GLOBAL TOP 10
                 </div>
                 {boardMode === 'local' && (
-                  <span className="text-[9px] tracking-widest text-stone-600">LOCAL BOARD</span>
+                  <span className="text-[9px] tracking-widest text-[var(--ink-faint)]">LOCAL BOARD</span>
                 )}
               </div>
               {board.length > 0 ? (
                 renderBoard(board)
               ) : (
-                <div className="py-4 text-center text-[11px] tracking-widest text-stone-600">
+                <div className="py-4 text-center text-[11px] tracking-widest text-[var(--ink-faint)]">
                   NO TOWERS LOGGED YET — BE THE FIRST
                 </div>
               )}
@@ -403,7 +413,7 @@ export default function StackPage() {
       {/* --------------------------------------------------- GAME OVER */}
       {phase === 'over' && overStats && (
         <div
-          className="absolute inset-0 z-10 flex items-center justify-center overflow-y-auto bg-black/70 px-4 py-8 backdrop-blur-[1px]"
+          className="absolute inset-0 z-10 flex items-center justify-center overflow-y-auto bg-[var(--overlay)] px-4 py-8 backdrop-blur-[1px]"
           onClick={retry}
         >
           <div className="w-full max-w-2xl" onClick={(e) => e.stopPropagation()}>
@@ -425,21 +435,21 @@ export default function StackPage() {
             </div>
 
             <div className="mt-6 grid grid-cols-3 gap-3">
-              <div className="rounded border border-red-950/80 bg-black/60 p-3 text-center">
-                <div className="text-[10px] tracking-widest text-stone-500">HEIGHT</div>
-                <div className="text-xl font-black text-stone-100">{overStats.score}</div>
+              <div className="rounded border border-red-950/80 bg-[var(--panel)] p-3 text-center">
+                <div className="text-[10px] tracking-widest text-[var(--ink-dim)]">HEIGHT</div>
+                <div className="text-xl font-black text-[var(--ink)]">{overStats.score}</div>
               </div>
-              <div className="rounded border border-red-950/80 bg-black/60 p-3 text-center">
-                <div className="text-[10px] tracking-widest text-stone-500">PERFECTS</div>
-                <div className="text-xl font-black text-stone-100">{overStats.perfects}</div>
+              <div className="rounded border border-red-950/80 bg-[var(--panel)] p-3 text-center">
+                <div className="text-[10px] tracking-widest text-[var(--ink-dim)]">PERFECTS</div>
+                <div className="text-xl font-black text-[var(--ink)]">{overStats.perfects}</div>
               </div>
-              <div className="rounded border border-red-950/80 bg-black/60 p-3 text-center">
-                <div className="text-[10px] tracking-widest text-stone-500">BEST STREAK</div>
-                <div className="text-xl font-black text-stone-100">×{overStats.bestStreak}</div>
+              <div className="rounded border border-red-950/80 bg-[var(--panel)] p-3 text-center">
+                <div className="text-[10px] tracking-widest text-[var(--ink-dim)]">BEST STREAK</div>
+                <div className="text-xl font-black text-[var(--ink)]">×{overStats.bestStreak}</div>
               </div>
             </div>
 
-            <div className="mt-4 rounded border border-red-950/80 bg-black/60 p-4">
+            <div className="mt-4 rounded border border-red-950/80 bg-[var(--panel)] p-4">
               {!submitted ? (
                 <form
                   className="flex flex-col gap-3 sm:flex-row"
@@ -453,7 +463,7 @@ export default function StackPage() {
                     onChange={(e) => setName(e.target.value.slice(0, 16))}
                     placeholder="CALLSIGN"
                     maxLength={16}
-                    className="h-11 flex-1 border-red-900/60 bg-black/60 font-bold tracking-widest text-stone-100 placeholder:text-stone-700 focus-visible:ring-red-500"
+                    className="h-11 flex-1 border-red-900/60 bg-[var(--panel)] font-bold tracking-widest text-[var(--ink)] placeholder:text-[var(--ink-faint)] focus-visible:ring-red-500"
                     aria-label="Callsign for the leaderboard"
                   />
                   <Button
@@ -468,7 +478,7 @@ export default function StackPage() {
                 <div className="py-1 text-center text-sm tracking-widest text-emerald-400">
                   SCORE LOGGED{rank ? ` — GLOBAL RANK #${rank}` : ''}
                   {boardMode === 'local' && (
-                    <span className="ml-2 text-[10px] text-stone-500">(LOCAL BOARD)</span>
+                    <span className="ml-2 text-[10px] text-[var(--ink-dim)]">(LOCAL BOARD)</span>
                   )}
                 </div>
               )}
@@ -476,7 +486,7 @@ export default function StackPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-8 border-red-950 bg-transparent text-[11px] tracking-widest text-stone-400 hover:border-red-800 hover:text-stone-200"
+                  className="h-8 border-red-950 bg-transparent text-[11px] tracking-widest text-[var(--ink-dim)] hover:border-red-800 hover:text-[var(--ink)]"
                   onClick={() => void shareScore()}
                 >
                   <Share2 className="mr-1.5 h-3.5 w-3.5" /> SHARE THIS RUN
@@ -498,7 +508,7 @@ export default function StackPage() {
               <Button
                 size="lg"
                 variant="outline"
-                className="h-12 w-64 border-red-950 bg-transparent font-bold tracking-widest text-stone-400 hover:border-red-800 hover:text-stone-200"
+                className="h-12 w-64 border-red-950 bg-transparent font-bold tracking-widest text-[var(--ink-dim)] hover:border-red-800 hover:text-[var(--ink)]"
                 onClick={() => {
                   setPhase('menu')
                   void refreshBoard()
@@ -508,7 +518,7 @@ export default function StackPage() {
               </Button>
             </div>
             <div className="mt-4 text-center">
-              <span className="inline-flex items-center gap-1.5 text-[10px] tracking-[0.3em] text-stone-600">
+              <span className="inline-flex items-center gap-1.5 text-[10px] tracking-[0.3em] text-[var(--ink-faint)]">
                 <MousePointerClick className="h-3.5 w-3.5" /> TAP ANYWHERE — INSTANT RETRY
               </span>
             </div>
@@ -518,11 +528,12 @@ export default function StackPage() {
 
       {/* mute button on menu too */}
       {phase === 'menu' && (
-        <div className="absolute right-3 top-3 z-20">
+        <div className="absolute right-3 top-3 z-20 flex gap-2">
+          <ThemeToggle className="h-9 w-16" />
           <Button
             size="icon"
             variant="outline"
-            className="h-9 w-9 border-red-900/60 bg-black/50 text-stone-300 hover:bg-red-950/60 hover:text-red-400"
+            className="h-9 w-9 border-red-900/60 bg-[var(--panel)] text-[var(--ink-dim)] hover:bg-red-950/60 hover:text-red-400"
             onClick={toggleMute}
             aria-label={muted ? 'Unmute' : 'Mute'}
           >

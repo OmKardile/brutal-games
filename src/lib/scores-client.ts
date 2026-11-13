@@ -14,7 +14,7 @@ export function apiUrl(path: string): string {
   return `${API_BASE}${path}`
 }
 
-export type GameId = 'arena' | 'stack'
+export type GameId = 'arena' | 'stack' | 'reflex' | 'dodge' | 'merge'
 
 export interface BoardEntry {
   id: string

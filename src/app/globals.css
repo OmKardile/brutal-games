@@ -123,6 +123,158 @@
 
 /* ------------------------------------------------ BRUTAL landing effects */
 
+/* ---------------------------------------------- NIGHT / DAY THEME TOKENS
+   Everything on the site (and the page chrome around each game) reads these.
+   Night = pitch black + bone text. Day = bone paper + ink text. Per-game
+   accent colors live in the components; they stay vivid in both modes. */
+
+:root,
+[data-theme='night'] {
+  --bg: #08080c;
+  --bg-soft: #0e0e14;
+  --bg-raise: #12121a;
+  --ink: #f5f5f4;
+  --ink-dim: #a8a29e;
+  --ink-faint: #57534e;
+  --line: rgba(255, 255, 255, 0.09);
+  --line-strong: rgba(255, 255, 255, 0.18);
+  --overlay: rgba(5, 5, 9, 0.78);
+  --panel: rgba(10, 10, 16, 0.66);
+  --accent: #ff2d2d;
+  --accent-ink: #ff5c5c;
+  --gold: #ffb020;
+  --grain-opacity: 0.05;
+  color-scheme: dark;
+}
+
+[data-theme='day'] {
+  --bg: #efece3;
+  --bg-soft: #e6e2d6;
+  --bg-raise: #fdfcf8;
+  --ink: #1b1917;
+  --ink-dim: #57534e;
+  --ink-faint: #a8a29e;
+  --line: rgba(27, 25, 23, 0.14);
+  --line-strong: rgba(27, 25, 23, 0.3);
+  --overlay: rgba(239, 236, 227, 0.84);
+  --panel: rgba(253, 252, 248, 0.72);
+  --accent: #e11d2f;
+  --accent-ink: #be123c;
+  --gold: #b45309;
+  --grain-opacity: 0.35;
+  color-scheme: light;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 0;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}
+
+/* ------------------------------------------------------- display font */
+
+.font-display {
+  font-family: var(--font-display), 'Arial Black', 'Archivo Black', sans-serif;
+  letter-spacing: -0.01em;
+}
+
+/* --------------------------------------------------- awwwards utilities */
+
+@keyframes brutal-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.brutal-marquee {
+  display: flex;
+  width: max-content;
+  animation: brutal-marquee var(--marquee-dur, 22s) linear infinite;
+}
+
+.brutal-marquee-reverse {
+  animation-direction: reverse;
+}
+
+@keyframes brutal-blob {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(4vw, -3vh) scale(1.12);
+  }
+  66% {
+    transform: translate(-3vw, 4vh) scale(0.94);
+  }
+}
+
+.brutal-blob {
+  animation: brutal-blob 14s ease-in-out infinite;
+}
+
+/* outline / stroked display text */
+.brutal-outline {
+  color: transparent;
+  -webkit-text-stroke: 1.5px var(--ink);
+}
+
+.brutal-outline-accent {
+  color: transparent;
+  -webkit-text-stroke: 1.5px var(--accent);
+}
+
+/* scroll reveal (IntersectionObserver flips [data-visible]) */
+.brutal-reveal {
+  opacity: 0;
+  transform: translateY(26px);
+  transition:
+    opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+
+.brutal-reveal[data-visible='true'] {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brutal-reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .brutal-marquee,
+  .brutal-blob {
+    animation: none;
+  }
+}
+
 @keyframes brutal-scan {
   0% {
     transform: translateY(-100%);

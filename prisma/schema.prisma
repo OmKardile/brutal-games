@@ -22,7 +22,7 @@ model HighScore {
   score     Int
   wave      Int
   kills     Int
-  // which game the run belongs to: "arena" (wave shooter) | "stack" (tower stacker)
+  // which game the run belongs to: arena | stack | reflex | dodge | merge
   game      String   @default("arena")
   createdAt DateTime @default(now())
 

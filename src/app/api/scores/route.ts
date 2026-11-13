@@ -5,7 +5,7 @@ import { db } from '@/lib/db'
 export const dynamic = 'force-dynamic'
 
 // games with a shared global leaderboard
-const GAMES = ['arena', 'stack'] as const
+const GAMES = ['arena', 'stack', 'reflex', 'dodge', 'merge'] as const
 type Game = (typeof GAMES)[number]
 
 const ScoreSchema = z.object({

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import {
@@ -10,13 +10,18 @@ import {
   loadPilot,
   type PilotData,
 } from '@/game/pilot'
+import { useTheme } from '@/lib/theme'
+import { ThemeToggle } from '@/components/ThemeToggle'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { apiUrl, fetchBoard as fetchBoardApi, type BoardEntry, type BoardTotals } from '@/lib/scores-client'
+import { apiUrl, fetchBoard, type BoardEntry, type BoardTotals, type GameId } from '@/lib/scores-client'
 import { assetUrl } from '@/lib/assets'
+import { cn } from '@/lib/utils'
 import {
   Activity,
-  Crosshair,
+  Atom,
+  ChevronRight,
+  Clock,
+  Flame,
   Gamepad2,
   Globe,
   Keyboard,
@@ -25,23 +30,120 @@ import {
   Play,
   Skull,
   Swords,
+  Target,
+  Timer,
   Trophy,
   Zap,
-  Zap as ZapIcon,
 } from 'lucide-react'
 
-type Totals = BoardTotals
+// ============================================================ game catalog
 
-// --------------------------------------------------------------- stack art
+interface GameMeta {
+  id: GameId
+  href: string
+  name: string
+  tag: string
+  accent: string // picked per theme below via accentFor()
+  night: string
+  day: string
+  desc: string
+  meta: string[]
+  span: string
+  boardCols: [string, string] // [wave col label, kills col label]
+  fmtWave: (w: number) => string
+  fmtKills: (k: number) => string
+}
 
-function StackTowerArt() {
+const GAMES: GameMeta[] = [
+  {
+    id: 'arena',
+    href: '/play',
+    name: 'ARENA',
+    tag: 'TWIN-STICK SHOOTER',
+    accent: '#ff2d2d',
+    night: '#ff2d2d',
+    day: '#dc2626',
+    desc: 'Top-down wave survival. Draft upgrades between waves, chain killstreaks, charge OVERDRIVE and kill the Brute every 5th wave.',
+    meta: ['WASD + MOUSE', 'TOUCH', 'GAMEPAD', '~3 MIN RUNS'],
+    span: 'md:col-span-4',
+    boardCols: ['WAVE', 'KILLS'],
+    fmtWave: (w) => `W${w}`,
+    fmtKills: (k) => `${k} K`,
+  },
+  {
+    id: 'stack',
+    href: '/stack',
+    name: 'STACK',
+    tag: 'ONE-TAP TOWER',
+    accent: '#ffb020',
+    night: '#ffb020',
+    day: '#b45309',
+    desc: 'One tap. Drop the block, slice the overhang, chain PERFECT drops to regrow the tower. How high before it collapses?',
+    meta: ['SINGLE TAP', '30-SECOND RUNS', 'INSTANT RETRY'],
+    span: 'md:col-span-2',
+    boardCols: ['ALT', 'PERFECT'],
+    fmtWave: (w) => `${w} ALT`,
+    fmtKills: (k) => `${k} P`,
+  },
+  {
+    id: 'reflex',
+    href: '/reflex',
+    name: 'REFLEX',
+    tag: 'TIMING STRIKE',
+    accent: '#22d3ee',
+    night: '#22d3ee',
+    day: '#0891b2',
+    desc: 'A blade sweeps. Tap inside the zone. Perfect hits regrow it, sloppy hits shrink it, one miss ends everything.',
+    meta: ['ONE INPUT', 'STREAK LADDER', 'SLOW-MO DEATH'],
+    span: 'md:col-span-2',
+    boardCols: ['STREAK', 'PERFECT'],
+    fmtWave: (w) => `×${w}`,
+    fmtKills: (k) => `${k} P`,
+  },
+  {
+    id: 'dodge',
+    href: '/dodge',
+    name: 'DODGE',
+    tag: 'ONE-BUTTON GAUNTLET',
+    accent: '#c084fc',
+    night: '#c084fc',
+    day: '#7c3aed',
+    desc: 'Hold to climb, release to fall. Graze obstacles for CLOSE bonuses, snatch orbs from stupid places, never touch red.',
+    meta: ['HOLD ANYTHING', 'NEAR-MISS BONUSES', 'SPEED RAMP'],
+    span: 'md:col-span-2',
+    boardCols: ['METERS', 'ORBS'],
+    fmtWave: (w) => `${w}m`,
+    fmtKills: (k) => `${k} ORB`,
+  },
+  {
+    id: 'merge',
+    href: '/merge',
+    name: 'MERGE',
+    tag: 'DROP-FUSE PIT',
+    accent: '#a3e635',
+    night: '#a3e635',
+    day: '#4d7c0f',
+    desc: 'Drop orbs, fuse matching tiers, chain combos up to ×6. Forge the tier-11 SINGULARITY and watch it eat the pit.',
+    meta: ['AIM + DROP', 'CHAIN ×6', 'SINGULARITY'],
+    span: 'md:col-span-2',
+    boardCols: ['FORGE', 'FUSIONS'],
+    fmtWave: (w) => `T${w}`,
+    fmtKills: (k) => `${k} FUSE`,
+  },
+]
+
+function accentFor(g: GameMeta, theme: 'night' | 'day'): string {
+  return theme === 'night' ? g.night : g.day
+}
+
+// ============================================================ game art (SVG)
+
+function StackArt() {
   return (
     <svg viewBox="0 0 200 230" className="h-44 w-full" aria-hidden>
-      {/* base block */}
       <polygon points="152,150 100,176 100,216 152,190" fill="#b91c1c" />
       <polygon points="48,150 100,176 100,216 48,190" fill="#7f1d1d" />
       <polygon points="100,124 152,150 100,176 48,150" fill="#ef4444" />
-      {/* perfect middle block */}
       <polygon points="144,110 100,132 100,166 144,144" fill="#b45309" />
       <polygon points="56,110 100,132 100,166 56,144" fill="#92400e" />
       <polygon points="100,88 144,110 100,132 56,110" fill="#f59e0b" />
@@ -52,11 +154,9 @@ function StackTowerArt() {
         strokeWidth="2"
         opacity="0.9"
       />
-      {/* sliding block */}
       <polygon points="160,72 124,90 124,118 160,100" fill="#b91c1c" />
       <polygon points="88,72 124,90 124,118 88,100" fill="#991b1b" />
       <polygon points="124,54 160,72 124,90 88,72" fill="#f87171" />
-      {/* sparks */}
       <rect x="150" y="46" width="4" height="4" fill="#fde68a" />
       <rect x="171" y="60" width="3" height="3" fill="#fbbf24" />
       <rect x="140" y="32" width="3" height="3" fill="#fbbf24" />
@@ -65,72 +165,138 @@ function StackTowerArt() {
   )
 }
 
-// ---------------------------------------------------------------- bestiary
+function ReflexArt() {
+  return (
+    <svg viewBox="0 0 200 230" className="h-44 w-full" aria-hidden>
+      {/* track */}
+      <rect x="14" y="118" width="172" height="34" rx="2" fill="#12121a" stroke="#22d3ee" strokeOpacity="0.3" />
+      {/* ticks */}
+      {[...Array(9)].map((_, i) => (
+        <rect key={i} x={22 + i * 20} y={140} width="2" height="12" fill="#22d3ee" opacity="0.25" />
+      ))}
+      {/* zone */}
+      <rect x="96" y="121" width="44" height="28" fill="#22d3ee" opacity="0.3" />
+      <rect x="96" y="112" width="3" height="46" fill="#22d3ee" />
+      <rect x="137" y="112" width="3" height="46" fill="#22d3ee" />
+      <rect x="117" y="106" width="2" height="58" fill="#ffffff" />
+      {/* blade */}
+      <rect x="58" y="104" width="6" height="62" fill="#22d3ee" />
+      <rect x="60" y="100" width="2" height="70" fill="#ffffff" />
+      {/* trail */}
+      <rect x="40" y="112" width="4" height="46" fill="#22d3ee" opacity="0.25" />
+      <rect x="30" y="112" width="3" height="46" fill="#22d3ee" opacity="0.12" />
+      {/* score pop */}
+      <text x="118" y="86" fontFamily="monospace" fontSize="13" fontWeight="900" fill="#a5f3fc">
+        PERFECT
+      </text>
+      {/* sparks */}
+      <rect x="150" y="66" width="4" height="4" fill="#a5f3fc" />
+      <rect x="166" y="82" width="3" height="3" fill="#22d3ee" />
+      <rect x="138" y="52" width="3" height="3" fill="#67e8f9" />
+      <circle cx="60" cy="92" r="10" fill="none" stroke="#22d3ee" strokeWidth="2" opacity="0.7" />
+    </svg>
+  )
+}
+
+function DodgeArt() {
+  return (
+    <svg viewBox="0 0 200 230" className="h-44 w-full" aria-hidden>
+      {/* walls */}
+      <rect x="0" y="8" width="200" height="6" fill="#dc2626" />
+      <rect x="0" y="216" width="200" height="6" fill="#dc2626" />
+      {/* gate */}
+      <rect x="128" y="14" width="18" height="72" fill="#12121a" stroke="#c084fc" strokeOpacity="0.4" />
+      <rect x="128" y="144" width="18" height="72" fill="#12121a" stroke="#c084fc" strokeOpacity="0.4" />
+      <rect x="128" y="84" width="18" height="3" fill="#c084fc" />
+      <rect x="128" y="141" width="18" height="3" fill="#c084fc" />
+      {/* orb */}
+      <circle cx="160" cy="112" r="7" fill="#6dff8a" />
+      <circle cx="157" cy="109" r="2" fill="#ffffff" />
+      {/* ship */}
+      <polygon points="86,115 60,101 67,115 60,129" fill="#f5f5f4" />
+      <circle cx="78" cy="113" r="4" fill="#c084fc" />
+      <polygon points="62,108 44,115 62,122" fill="#ffb020" opacity="0.85" />
+      {/* near-miss pop */}
+      <text x="84" y="88" fontFamily="monospace" fontSize="11" fontWeight="900" fill="#e9d5ff">
+        CLOSE +25
+      </text>
+      {/* speed lines */}
+      <line x1="0" y1="60" x2="28" y2="60" stroke="#a8a29e" strokeWidth="1" opacity="0.4" />
+      <line x1="0" y1="168" x2="18" y2="168" stroke="#a8a29e" strokeWidth="1" opacity="0.4" />
+      <line x1="14" y1="190" x2="40" y2="190" stroke="#a8a29e" strokeWidth="1" opacity="0.3" />
+    </svg>
+  )
+}
+
+function MergeArt() {
+  const tiers = [
+    { cx: 100, cy: 196, r: 26, c: '#8b1f1f' },
+    { cx: 64, cy: 196, r: 26, c: '#8b1f1f' },
+    { cx: 138, cy: 196, r: 26, c: '#b91c1c' },
+    { cx: 100, cy: 160, r: 30, c: '#ea580c' },
+    { cx: 62, cy: 158, r: 24, c: '#dc2626' },
+    { cx: 100, cy: 118, r: 26, c: '#f59e0b' },
+    { cx: 140, cy: 150, r: 22, c: '#f97316' },
+  ]
+  return (
+    <svg viewBox="0 0 200 230" className="h-44 w-full" aria-hidden>
+      {/* pit */}
+      <line x1="26" y1="20" x2="26" y2="222" stroke="#57534e" strokeWidth="4" />
+      <line x1="174" y1="20" x2="174" y2="222" stroke="#57534e" strokeWidth="4" />
+      <line x1="26" y1="222" x2="174" y2="222" stroke="#57534e" strokeWidth="4" />
+      {/* danger line */}
+      <line x1="26" y1="64" x2="174" y2="64" stroke="#dc2626" strokeWidth="2" strokeDasharray="8 6" opacity="0.7" />
+      {/* dropper orb */}
+      <circle cx="100" cy="40" r="16" fill="#b91c1c" stroke="#7f1d1d" strokeWidth="3" />
+      <ellipse cx="94" cy="34" rx="4" ry="2.5" fill="#ffffff" opacity="0.5" />
+      {/* orbs */}
+      {tiers.map((t, i) => (
+        <g key={i}>
+          <circle cx={t.cx} cy={t.cy} r={t.r} fill={t.c} stroke="#00000055" strokeWidth="2" />
+          <ellipse cx={t.cx - t.r * 0.3} cy={t.cy - t.r * 0.4} rx={t.r * 0.2} ry={t.r * 0.12} fill="#ffffff" opacity="0.45" />
+        </g>
+      ))}
+      {/* fuse flash */}
+      <circle cx="100" cy="118" r="34" fill="none" stroke="#fde047" strokeWidth="2" opacity="0.8" />
+      <text x="100" y="102" fontFamily="monospace" fontSize="11" fontWeight="900" fill="#d9f99d" textAnchor="middle">
+        +30 ×3
+      </text>
+    </svg>
+  )
+}
+
+const GAME_ART: Record<GameId, () => React.ReactElement> = {
+  arena: () => <div aria-hidden className="h-44 w-full" />,
+  stack: StackArt,
+  reflex: ReflexArt,
+  dodge: DodgeArt,
+  merge: MergeArt,
+}
+
+// ================================================================ bestiary
 
 const BESTIARY = [
-  {
-    name: 'GRUNT',
-    color: '#ff4444',
-    shape: 'square',
-    threat: 1,
-    desc: 'Slow, relentless, everywhere. The bread and butter of the horde.',
-  },
-  {
-    name: 'DARTER',
-    color: '#ff9f1a',
-    shape: 'dart',
-    threat: 2,
-    desc: 'Weaves in fast at 210 units/s. Punishes standing still.',
-  },
-  {
-    name: 'SPLITTER',
-    color: '#b8e62e',
-    shape: 'orb',
-    threat: 2,
-    desc: 'Pops into two furious minis when it dies. Kill it mid-dash.',
-  },
-  {
-    name: 'SPITTER',
-    color: '#ff5c8a',
-    shape: 'pentagon',
-    threat: 3,
-    desc: 'Keeps distance and fires 3-round bursts. Flank it, don\u2019t chase it.',
-  },
-  {
-    name: 'TANK',
-    color: '#b91c1c',
-    shape: 'hex',
-    threat: 4,
-    desc: '250 HP of armored hatred. Barely flinches at knockback.',
-  },
-  {
-    name: 'THE BRUTE',
-    color: '#ff2222',
-    shape: 'spike',
-    threat: 5,
-    desc: 'Every 5th wave. Radial bullet storms, spawns minions, enrages at 30%. Pray.',
-  },
+  { name: 'GRUNT', color: '#ff4444', shape: 'square', threat: 1, desc: 'Slow, relentless, everywhere. The bread and butter of the horde.' },
+  { name: 'DARTER', color: '#ff9f1a', shape: 'dart', threat: 2, desc: 'Weaves in fast at 210 units/s. Punishes standing still.' },
+  { name: 'SPLITTER', color: '#b8e62e', shape: 'orb', threat: 2, desc: 'Pops into two furious minis when it dies. Kill it mid-dash.' },
+  { name: 'SPITTER', color: '#ff5c8a', shape: 'pentagon', threat: 3, desc: 'Keeps distance and fires 3-round bursts. Flank it, don\u2019t chase it.' },
+  { name: 'TANK', color: '#b91c1c', shape: 'hex', threat: 4, desc: '250 HP of armored hatred. Barely flinches at knockback.' },
+  { name: 'THE BRUTE', color: '#ff2222', shape: 'spike', threat: 5, desc: 'Every 5th wave. Radial bullet storms, spawns minions, enrages at 30%. Pray.' },
 ]
 
 function EnemyGlyph({ shape, color }: { shape: string; color: string }) {
   const common = { fill: color, stroke: 'rgba(255,255,255,0.25)', strokeWidth: 1.5 }
   return (
     <svg viewBox="0 0 64 64" className="h-14 w-14" aria-hidden>
-      {shape === 'square' && (
-        <rect x="14" y="14" width="36" height="36" rx="3" transform="rotate(45 32 32)" {...common} />
-      )}
-      {shape === 'dart' && (
-        <polygon points="56,32 12,50 24,32 12,14" {...common} />
-      )}
+      {shape === 'square' && <rect x="14" y="14" width="36" height="36" rx="3" transform="rotate(45 32 32)" {...common} />}
+      {shape === 'dart' && <polygon points="56,32 12,50 24,32 12,14" {...common} />}
       {shape === 'orb' && (
         <>
           <circle cx="32" cy="32" r="19" {...common} />
           <circle cx="32" cy="32" r="9" fill="none" stroke="rgba(0,0,0,0.5)" strokeWidth="3" />
         </>
       )}
-      {shape === 'pentagon' && (
-        <polygon points="32,10 54,26 46,52 18,52 10,26" {...common} />
-      )}
+      {shape === 'pentagon' && <polygon points="32,10 54,26 46,52 18,52 10,26" {...common} />}
       {shape === 'hex' && (
         <>
           <polygon points="32,8 54,20 54,44 32,56 10,44 10,20" {...common} />
@@ -151,23 +317,146 @@ function EnemyGlyph({ shape, color }: { shape: string; color: string }) {
   )
 }
 
-// ---------------------------------------------------------------- page
+// ============================================================ reveal + misc
+
+function Reveal({
+  children,
+  delay = 0,
+  className,
+}: {
+  children: React.ReactNode
+  delay?: number
+  className?: string
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [visible, setVisible] = useState(false)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setVisible(true)
+          io.disconnect()
+        }
+      },
+      { threshold: 0.12 },
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [])
+  return (
+    <div
+      ref={ref}
+      data-visible={visible}
+      className={cn('brutal-reveal', className)}
+      style={{ ['--reveal-delay' as string]: `${delay}ms` }}
+    >
+      {children}
+    </div>
+  )
+}
+
+function useInView() {
+  const ref = useRef<HTMLDivElement>(null)
+  const [inView, setInView] = useState(false)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const io = new IntersectionObserver(
+      ([e]) => {
+        if (e.isIntersecting) {
+          setInView(true)
+          io.disconnect()
+        }
+      },
+      { threshold: 0.3 },
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [])
+  return { ref, inView }
+}
+
+function CountUp({ target, active, suffix = '' }: { target: number; active: boolean; suffix?: string }) {
+  const [v, setV] = useState(0)
+  useEffect(() => {
+    if (!active) return
+    let raf = 0
+    const t0 = performance.now()
+    const dur = 1400
+    const tick = (t: number) => {
+      const p = Math.min(1, (t - t0) / dur)
+      const e = 1 - Math.pow(1 - p, 3)
+      setV(Math.round(target * e))
+      if (p < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [target, active])
+  return (
+    <span className="tabular-nums">
+      {v.toLocaleString()}
+      {suffix}
+    </span>
+  )
+}
+
+function Marquee({ items, reverse = false, duration = 24 }: { items: string[]; reverse?: boolean; duration?: number }) {
+  const row = [...items, ...items, ...items, ...items]
+  return (
+    <div className="overflow-hidden" aria-hidden>
+      <div
+        className={cn('brutal-marquee', reverse && 'brutal-marquee-reverse')}
+        style={{ ['--marquee-dur' as string]: `${duration}s` }}
+      >
+        {[0, 1].map((half) => (
+          <div key={half} className="flex shrink-0 items-center">
+            {row.map((label, i) => (
+              <span key={`${half}-${i}`} className="flex items-center whitespace-nowrap">
+                <span className="px-5">{label}</span>
+                <span className="text-[0.6em] opacity-60">✦</span>
+              </span>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ================================================================ the page
 
 export default function LandingPage() {
-  const [board, setBoard] = useState<BoardEntry[]>([])
-  const [totals, setTotals] = useState<Totals | null>(null)
+  const { theme } = useTheme()
+
   const [pilot, setPilot] = useState<PilotData | null>(null)
   const [rewardsEnabled, setRewardsEnabled] = useState(false)
+  const [totals, setTotals] = useState<{ runs: number; kills: number; top: number } | null>(null)
+
+  // leaderboard tabs
+  const [activeGame, setActiveGame] = useState<GameId>('arena')
+  const [board, setBoard] = useState<BoardEntry[]>([])
+  const [boardMode, setBoardMode] = useState<'online' | 'local'>('online')
+  const [boardLoading, setBoardLoading] = useState(true)
+
+  // hero parallax layers (direct DOM writes — no re-render storm)
+  const heroLayerA = useRef<HTMLDivElement>(null)
+  const heroLayerB = useRef<HTMLDivElement>(null)
+  const onHeroMove = useCallback((e: React.MouseEvent<HTMLElement>) => {
+    const r = e.currentTarget.getBoundingClientRect()
+    const nx = (e.clientX - r.left) / r.width - 0.5
+    const ny = (e.clientY - r.top) / r.height - 0.5
+    if (heroLayerA.current) {
+      heroLayerA.current.style.transform = `translate(${nx * 16}px, ${ny * 12}px)`
+    }
+    if (heroLayerB.current) {
+      heroLayerB.current.style.transform = `translate(${nx * -26}px, ${ny * -18}px)`
+    }
+  }, [])
 
   useEffect(() => {
     setPilot(loadPilot())
-    const load = async () => {
-      // online arena board; local-board fallback on static deployments
-      const res = await fetchBoardApi('arena')
-      setBoard(res.scores)
-      setTotals(res.totals)
-    }
-    void load()
     void (async () => {
       try {
         const res = await fetch(apiUrl('/api/rewards/config'), { cache: 'no-store' })
@@ -179,300 +468,544 @@ export default function LandingPage() {
         // rewards nav stays hidden on failure
       }
     })()
+    void (async () => {
+      // stats band — totals across every game
+      try {
+        const results = await Promise.all(GAMES.map((g) => fetchBoard(g.id)))
+        const runs = results.reduce((s, r) => s + (r.totals?.runs ?? 0), 0)
+        const kills = results.reduce((s, r) => s + (r.totals?.kills ?? 0), 0)
+        const top = results.reduce((m, r) => Math.max(m, r.totals?.top ?? 0), 0)
+        setTotals({ runs, kills, top })
+      } catch {
+        setTotals({ runs: 0, kills: 0, top: 0 })
+      }
+    })()
   }, [])
+
+  const loadBoard = useCallback(async (game: GameId) => {
+    setBoardLoading(true)
+    try {
+      const res = await fetchBoard(game)
+      setBoard(res.scores)
+      setBoardMode(res.mode)
+    } catch {
+      setBoard([])
+    } finally {
+      setBoardLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadBoard(activeGame)
+  }, [activeGame, loadBoard])
 
   const lvl = pilot ? levelFromXp(pilot.xp) : null
   const returning = !!pilot && pilot.runs > 0
+  const activeMeta = GAMES.find((g) => g.id === activeGame) ?? GAMES[0]
+  const statsRef = useInView()
+
+  const navLinks: { label: string; href: string }[] = [
+    { label: 'GAMES', href: '#games' },
+    { label: 'BESTIARY', href: '#bestiary' },
+    { label: 'HOW TO', href: '#howto' },
+    { label: 'LEADERBOARD', href: '#leaderboard' },
+  ]
 
   return (
-    <main className="min-h-dvh w-full overflow-x-clip bg-[#070709] font-mono text-stone-200">
-      {/* ------------------------------------------------------------- NAV */}
-      <nav className="sticky top-0 z-50 border-b border-red-950/60 bg-[#070709]/85 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
-          <Link href="/" className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-sm bg-red-600 text-xs font-black text-white">
+    <main className="min-h-dvh w-full overflow-x-clip bg-[var(--bg)] font-mono text-[var(--ink)]">
+      {/* ============================================================ NAV */}
+      <nav className="fixed inset-x-0 top-0 z-50 border-b border-[var(--line)] bg-[var(--bg)]/80 backdrop-blur-md">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 md:px-6">
+          <Link href="/" className="group flex items-center gap-2.5">
+            <span className="flex h-8 w-8 items-center justify-center rounded-sm bg-[var(--accent)] text-xs font-black text-white transition-transform group-hover:rotate-6">
               B//
             </span>
-            <span className="text-sm font-black tracking-[0.25em] text-stone-200">
-              BRUTAL<span className="text-red-500">//</span>ARENA
+            <span className="text-sm font-black tracking-[0.25em] text-[var(--ink)]">
+              BRUTAL<span className="text-[var(--accent)]">//</span>GAMES
             </span>
           </Link>
-          <div className="hidden items-center gap-6 text-[11px] tracking-[0.25em] text-stone-500 md:flex">
-            <a href="#games" className="transition-colors hover:text-red-400">GAMES</a>
-            <a href="#features" className="transition-colors hover:text-red-400">FEATURES</a>
-            <a href="#bestiary" className="transition-colors hover:text-red-400">BESTIARY</a>
-            <a href="#leaderboard" className="transition-colors hover:text-red-400">LEADERBOARD</a>
-            <a href="#howto" className="transition-colors hover:text-red-400">HOW TO PLAY</a>
-            <Link href="/stack" className="text-amber-500 transition-colors hover:text-amber-400">
-              STACK
-            </Link>
+          <div className="hidden items-center gap-7 text-[11px] tracking-[0.25em] text-[var(--ink-dim)] lg:flex">
+            {navLinks.map((l) => (
+              <a key={l.href} href={l.href} className="transition-colors hover:text-[var(--accent)]">
+                {l.label}
+              </a>
+            ))}
             {rewardsEnabled && (
               <Link href="/rewards" className="text-amber-500 transition-colors hover:text-amber-400">
                 REWARDS
               </Link>
             )}
           </div>
-          <Link href="/play">
-            <Button className="h-9 border border-red-500/60 bg-red-600 px-5 text-xs font-black tracking-[0.2em] text-white hover:bg-red-500">
-              <Play className="mr-1.5 h-3.5 w-3.5" /> PLAY NOW
-            </Button>
-          </Link>
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
+            <Link href="/play" className="hidden sm:block">
+              <Button className="h-9 border border-[var(--accent)] bg-[var(--accent)] px-5 text-xs font-black tracking-[0.2em] text-white hover:brightness-110">
+                <Play className="mr-1.5 h-3.5 w-3.5" /> PLAY NOW
+              </Button>
+            </Link>
+          </div>
         </div>
       </nav>
 
-      {/* ------------------------------------------------------------- HERO */}
-      <section className="relative overflow-hidden">
-        {/* real-world backdrop */}
-        <div className="absolute inset-0">
-          <Image
-            src={assetUrl("/images/arena_bg.jpg")}
-            alt="A burning street at night — the arena awaits"
-            fill
-            priority
-            className="object-cover object-center opacity-60"
+      {/* ============================================================ HERO */}
+      <section className="relative flex min-h-dvh flex-col justify-center overflow-hidden pt-16">
+        {/* color field */}
+        <div className="absolute inset-0" aria-hidden>
+          <div
+            className="brutal-blob absolute -left-32 top-10 h-[46vw] w-[46vw] rounded-full opacity-[0.16] blur-[110px]"
+            style={{ background: '#ff2d2d' }}
           />
-          <div className="absolute inset-0 bg-gradient-to-b from-[#070709]/60 via-[#070709]/75 to-[#070709]" />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#070709]/80 via-transparent to-[#070709]/60" />
+          <div
+            className="brutal-blob absolute -right-24 top-1/3 h-[38vw] w-[38vw] rounded-full opacity-[0.13] blur-[110px]"
+            style={{ background: '#7c3aed', animationDelay: '-5s' }}
+          />
+          <div
+            className="brutal-blob absolute bottom-0 left-1/3 h-[30vw] w-[30vw] rounded-full opacity-[0.1] blur-[100px]"
+            style={{ background: '#22d3ee', animationDelay: '-9s' }}
+          />
+          <div
+            className="brutal-blob absolute bottom-1/4 right-1/3 h-[22vw] w-[22vw] rounded-full opacity-[0.08] blur-[90px]"
+            style={{ background: '#a3e635', animationDelay: '-3s' }}
+          />
         </div>
-        <div className="brutal-scanline" />
-        <div className="brutal-grain absolute inset-0 opacity-60" />
+        <div className="brutal-grain absolute inset-0 opacity-60" aria-hidden />
+        <div className="brutal-scanline" aria-hidden />
 
-        <div className="relative mx-auto grid max-w-6xl gap-10 px-4 pb-20 pt-16 md:grid-cols-[1.15fr_0.85fr] md:pt-24">
-          <div className="flex flex-col items-start justify-center">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-red-900/70 bg-black/50 px-3 py-1 text-[10px] tracking-[0.3em] text-red-400">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-60" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
+        {/* corner labels */}
+        <div className="absolute left-4 top-20 hidden text-[9px] tracking-[0.4em] text-[var(--ink-faint)] md:block" aria-hidden>
+          EST. 2025 — BROWSER FIRST
+        </div>
+        <div className="absolute right-4 top-20 hidden text-[9px] tracking-[0.4em] text-[var(--ink-faint)] md:block" aria-hidden>
+          5 GAMES / 0 DOWNLOADS / ∞ RETRIES
+        </div>
+
+        <div className="relative mx-auto w-full max-w-7xl px-4 py-16 md:px-6" onMouseMove={onHeroMove}>
+          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-[var(--line-strong)] bg-[var(--panel)] px-4 py-1.5 text-[10px] tracking-[0.35em] text-[var(--ink-dim)] backdrop-blur">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--accent)] opacity-60" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--accent)]" />
+            </span>
+            FREE BROWSER ARCADE — NOTHING TO INSTALL
+          </div>
+
+          {/* MEGA TYPE — layered RGB split + parallax */}
+          <h1 className="font-display select-none leading-[0.82]">
+            <span className="block text-[19vw] tracking-tight text-[var(--ink)] md:text-[11rem]">
+              BRUTAL
+            </span>
+            <span
+              ref={heroLayerA}
+              className="relative block text-[13vw] tracking-tight md:text-[7.5rem]"
+            >
+              <span aria-hidden className="absolute -left-1 top-1 text-[#ff2d2d] opacity-70 blur-[3px]">
+                //GAMES
               </span>
-              FREE TO PLAY — NO DOWNLOAD · OPTIONAL ACCOUNT
-            </div>
-            <h1 className="brutal-flicker text-5xl font-black leading-[0.95] tracking-tighter text-stone-100 md:text-7xl">
-              SURVIVE
-              <br />
-              THE ARENA.
-              <br />
-              <span className="text-red-500">DIE LOUD.</span>
-            </h1>
-            <p className="mt-5 max-w-md text-sm leading-relaxed text-stone-400">
-              A fast, brutal top-down wave shooter. Draft upgrades between waves,
-              chain killstreaks, charge <span className="text-amber-400">OVERDRIVE</span>,
-              and put your callsign on the global board. One run is 3 minutes —
-              &ldquo;one more run&rdquo; is 2 hours.
+              <span aria-hidden className="absolute -right-1 top-[-4px] text-[#22d3ee] opacity-60 blur-[3px]">
+                //GAMES
+              </span>
+              <span className="brutal-outline relative">//GAMES</span>
+            </span>
+          </h1>
+
+          <div ref={heroLayerB} className="mt-8 max-w-xl transition-transform duration-200">
+            <p className="text-sm leading-relaxed text-[var(--ink-dim)] md:text-base">
+              Five loud little arcade games. Kill the horde, stack the tower, hit
+              the zone, thread the gauntlet, fuse the pit.{' '}
+              <span className="text-[var(--ink)]">One run is 3 minutes.</span>{' '}
+              &ldquo;One more run&rdquo; is 2 hours.
             </p>
+
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link href="/play" className="w-full sm:w-auto">
                 <Button
                   size="lg"
-                  className="brutal-glow h-14 w-full border border-red-500/70 bg-red-600 px-10 text-base font-black tracking-[0.2em] text-white hover:bg-red-500 sm:w-auto"
+                  className="brutal-glow h-14 w-full border border-[var(--accent)] bg-[var(--accent)] px-10 text-base font-black tracking-[0.2em] text-white hover:brightness-110 sm:w-auto"
                 >
-                  <Play className="mr-2 h-5 w-5" /> ENTER THE ARENA
+                  <Play className="mr-2 h-5 w-5" /> START WITH ARENA
                 </Button>
               </Link>
-              <Link href="/play?wave=5" className="w-full sm:w-auto">
+              <a href="#games" className="w-full sm:w-auto">
                 <Button
                   size="lg"
                   variant="outline"
-                  className="h-14 w-full border-amber-800/70 bg-black/50 px-8 text-sm font-black tracking-[0.2em] text-amber-400 hover:border-amber-500 hover:text-amber-300 sm:w-auto"
+                  className="h-14 w-full border-[var(--line-strong)] bg-[var(--panel)] px-8 text-sm font-black tracking-[0.2em] text-[var(--ink)] backdrop-blur hover:border-[var(--ink)] sm:w-auto"
                 >
-                  <ZapIcon className="mr-2 h-4 w-4" /> BOSS RUSH — WAVE 5
+                  ALL 5 GAMES <ChevronRight className="ml-1 h-4 w-4" />
                 </Button>
-              </Link>
+              </a>
             </div>
-            <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-[10px] tracking-[0.25em] text-stone-500">
-              <span className="flex items-center gap-1.5">
-                <Keyboard className="h-3.5 w-3.5 text-red-500" /> KEYBOARD
-              </span>
-              <span className="flex items-center gap-1.5">
-                <MousePointerClick className="h-3.5 w-3.5 text-red-500" /> MOUSE
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Gamepad2 className="h-3.5 w-3.5 text-red-500" /> TOUCH
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Globe className="h-3.5 w-3.5 text-red-500" /> GLOBAL SCORES
-              </span>
-            </div>
-          </div>
 
-          {/* character art card */}
-          <div className="relative hidden items-center justify-center md:flex">
-            <div className="brutal-float relative w-72 rotate-2 overflow-hidden rounded border border-red-900/60 bg-black/60 shadow-[0_0_60px_rgba(239,68,68,0.25)]">
-              <Image
-                src={assetUrl("/images/hero_char.jpg")}
-                alt="Armored pilot of the arena"
-                width={448}
-                height={600}
-                className="h-auto w-full"
-              />
-              <div className="border-t border-red-950/70 bg-black/70 px-4 py-3">
-                <div className="flex items-center justify-between text-[10px] tracking-[0.25em]">
-                  <span className="text-stone-500">PILOT</span>
-                  <span className="text-red-400">STATUS: ARMED</span>
-                </div>
-              </div>
-            </div>
-            {/* floating kill chips */}
-            <div
-              className="brutal-chip absolute -left-2 top-10 rounded border border-amber-700/60 bg-black/80 px-3 py-1.5 text-xs font-black tracking-widest text-amber-400"
-              style={{ ['--chip-rot' as string]: '-6deg', animationDelay: '0s' }}
-            >
-              +480 PTS
-            </div>
-            <div
-              className="brutal-chip absolute -right-3 top-1/3 rounded border border-red-800/70 bg-black/80 px-3 py-1.5 text-xs font-black tracking-widest text-red-400"
-              style={{ ['--chip-rot' as string]: '5deg', animationDelay: '1.2s' }}
-            >
-              RAMPAGE ×20
-            </div>
-            <div
-              className="brutal-chip absolute -bottom-2 left-8 rounded border border-emerald-800/60 bg-black/80 px-3 py-1.5 text-xs font-black tracking-widest text-emerald-400"
-              style={{ ['--chip-rot' as string]: '3deg', animationDelay: '2.1s' }}
-            >
-              BRUTE DOWN
+            <div className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-2 text-[10px] tracking-[0.25em] text-[var(--ink-faint)]">
+              <span className="flex items-center gap-1.5">
+                <Keyboard className="h-3.5 w-3.5 text-[var(--accent)]" /> KEYBOARD
+              </span>
+              <span className="flex items-center gap-1.5">
+                <MousePointerClick className="h-3.5 w-3.5 text-[var(--accent)]" /> MOUSE + TOUCH
+              </span>
+              <span className="flex items-center gap-1.5">
+                <Gamepad2 className="h-3.5 w-3.5 text-[var(--accent)]" /> GAMEPAD
+              </span>
+              <span className="flex items-center gap-1.5">
+                <Globe className="h-3.5 w-3.5 text-[var(--accent)]" /> GLOBAL SCORES
+              </span>
             </div>
           </div>
         </div>
 
-        {/* live war-room ticker */}
-        <div className="relative border-y border-red-950/60 bg-black/60">
-          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-10 gap-y-2 px-4 py-3 text-[10px] tracking-[0.3em] text-stone-500">
-            <span className="flex items-center gap-2 text-red-400">
-              <Activity className="h-3.5 w-3.5" /> LIVE WAR ROOM
-            </span>
-            <span>
-              RUNS LOGGED:{' '}
-              <span className="font-bold text-stone-200">
-                {(totals?.runs ?? 0).toLocaleString()}
-              </span>
-            </span>
-            <span>
-              CONFIRMED KILLS:{' '}
-              <span className="font-bold text-stone-200">
-                {(totals?.kills ?? 0).toLocaleString()}
-              </span>
-            </span>
-            <span>
-              TOP SCORE:{' '}
-              <span className="font-bold text-amber-500">
-                {(totals?.top ?? 0).toLocaleString()}
-              </span>
-            </span>
-          </div>
+        {/* hero marquee ribbon */}
+        <div className="absolute inset-x-0 bottom-0 border-t border-[var(--line)] bg-[var(--bg)]/70 py-3 backdrop-blur">
+          <Marquee
+            items={['ARENA', 'STACK', 'REFLEX', 'DODGE', 'MERGE', 'PLAY FREE', 'DIE LOUD']}
+            duration={26}
+          />
         </div>
       </section>
 
-      {/* --------------------------------------------------- GAME SELECT */}
-      <section id="games" className="border-b border-red-950/40 py-16">
-        <div className="mx-auto max-w-6xl px-4">
-          <div className="text-center">
-            <div className="text-[10px] tracking-[0.4em] text-red-500">TWO WAYS TO BLEED</div>
-            <h2 className="mt-2 text-3xl font-black tracking-tight text-stone-100 md:text-4xl">
-              CHOOSE YOUR GAME
-            </h2>
-            <p className="mx-auto mt-3 max-w-md text-xs leading-relaxed text-stone-500">
-              Same pit, two disciplines. Mow the horde down in the arena — or freeze
-              your hands and stack the perfect tower.
-            </p>
-          </div>
-          <div className="mt-10 grid gap-5 md:grid-cols-2">
-            {/* ARENA card */}
-            <Link
-              href="/play"
-              className="group relative overflow-hidden rounded border border-red-950/80 bg-black/50 transition-all hover:-translate-y-1 hover:border-red-500/70 hover:shadow-[0_0_40px_rgba(239,68,68,0.2)]"
-            >
-              <div className="relative h-44 overflow-hidden border-b border-red-950/70">
-                <Image
-                  src={assetUrl("/images/shots/shot-game.jpg")}
-                  alt="BRUTAL ARENA — top-down wave shooter gameplay"
-                  fill
-                  className="object-cover opacity-70 transition-transform duration-500 group-hover:scale-105"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/85 to-transparent" />
-                <Badge
-                  variant="outline"
-                  className="absolute left-3 top-3 border-red-800/70 bg-black/70 text-[9px] tracking-[0.25em] text-red-400"
-                >
-                  TWIN-STICK SHOOTER
-                </Badge>
-              </div>
-              <div className="p-5">
-                <h3 className="text-xl font-black tracking-tight text-stone-100">
-                  BRUTAL <span className="text-red-500">//</span> ARENA
-                </h3>
-                <p className="mt-2 text-xs leading-relaxed text-stone-400">
-                  Top-down wave survival. Draft upgrades between waves, chain
-                  killstreaks, charge OVERDRIVE, and kill the Brute every 5th wave.
-                </p>
-                <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] tracking-[0.25em] text-stone-500">
-                  <span className="text-red-400">WASD + MOUSE</span>
-                  <span>·</span>
-                  <span>TOUCH</span>
-                  <span>·</span>
-                  <span>~3 MIN RUNS</span>
-                </div>
-              </div>
-            </Link>
-            {/* STACK card */}
-            <Link
-              href="/stack"
-              className="group relative overflow-hidden rounded border border-amber-950/80 bg-black/50 transition-all hover:-translate-y-1 hover:border-amber-500/70 hover:shadow-[0_0_40px_rgba(245,158,11,0.2)]"
-            >
-              <div className="relative h-44 overflow-hidden border-b border-amber-950/70 bg-[radial-gradient(ellipse_at_50%_30%,rgba(120,53,15,0.25),transparent_70%)]">
-                <StackTowerArt />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/85 to-transparent" />
-                <Badge
-                  variant="outline"
-                  className="absolute left-3 top-3 border-amber-800/70 bg-black/70 text-[9px] tracking-[0.25em] text-amber-400"
-                >
-                  NEW — ONE-TAP TOWER
-                </Badge>
-              </div>
-              <div className="p-5">
-                <h3 className="text-xl font-black tracking-tight text-stone-100">
-                  BRUTAL <span className="text-amber-500">//</span> STACK
-                </h3>
-                <p className="mt-2 text-xs leading-relaxed text-stone-400">
-                  One tap. Drop the block, slice the overhang, chain PERFECT drops to
-                  regrow the tower. How high before it all collapses?
-                </p>
-                <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] tracking-[0.25em] text-stone-500">
-                  <span className="text-amber-400">SINGLE TAP</span>
-                  <span>·</span>
-                  <span>30-SECOND RUNS</span>
-                  <span>·</span>
-                  <span>INSTANT RETRY</span>
-                </div>
-              </div>
-            </Link>
-          </div>
-        </div>
+      {/* ==================================================== MARQUEE BAND */}
+      <section className="relative -rotate-1 border-y-4 border-[var(--bg)] bg-[var(--accent)] py-2.5 text-[var(--bg)]" aria-hidden>
+        <Marquee
+          items={['FIVE WAYS TO BLEED', 'PICK YOUR POISON', 'INSTANT RETRY', 'NO MERCY']}
+          duration={20}
+        />
       </section>
 
-      {/* --------------------------------------------------- PILOT CARD */}
-      {returning && lvl && pilot && (
-        <section className="border-b border-red-950/40 bg-gradient-to-b from-red-950/15 to-transparent">
-          <div className="mx-auto max-w-6xl px-4 py-10">
-            <div className="flex flex-col items-start justify-between gap-6 rounded border border-amber-900/40 bg-black/50 p-6 md:flex-row md:items-center">
+      {/* ========================================================== GAMES */}
+      <section id="games" className="scroll-mt-20 py-20 md:py-28">
+        <div className="mx-auto max-w-7xl px-4 md:px-6">
+          <Reveal>
+            <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
-                <div className="text-[10px] tracking-[0.35em] text-amber-500/80">
-                  WELCOME BACK, PILOT
+                <div className="text-[10px] tracking-[0.4em] text-[var(--accent)]">01 / THE LINEUP</div>
+                <h2 className="font-display mt-2 text-5xl tracking-tight text-[var(--ink)] md:text-7xl">
+                  PICK YOUR <span className="brutal-outline-accent">POISON</span>
+                </h2>
+              </div>
+              <p className="max-w-xs text-right text-[11px] leading-relaxed text-[var(--ink-faint)]">
+                Same pit, five disciplines. Every game runs in this tab, on any
+                screen, with any input you own.
+              </p>
+            </div>
+          </Reveal>
+
+          <div className="mt-12 grid gap-5 md:grid-cols-6">
+            {GAMES.map((g, i) => {
+              const accent = accentFor(g, theme)
+              const Art = GAME_ART[g.id]
+              return (
+                <Reveal key={g.id} delay={i * 70} className={cn('contents')}>
+                  <Link
+                    href={g.href}
+                    className="group relative overflow-hidden rounded border border-[var(--line)] bg-[var(--bg-soft)] transition-all duration-300 hover:-translate-y-1.5 hover:border-[color:var(--g)]"
+                    style={{ ['--g' as string]: accent }}
+                  >
+                    {/* ghost index */}
+                    <span
+                      aria-hidden
+                      className="font-display pointer-events-none absolute -right-2 -top-6 z-10 text-8xl opacity-[0.07] transition-opacity group-hover:opacity-[0.16]"
+                      style={{ color: accent }}
+                    >
+                      {String(i + 1).padStart(2, '0')}
+                    </span>
+
+                    <div className="relative h-44 overflow-hidden border-b border-[var(--line)] bg-[radial-gradient(ellipse_at_50%_30%,color-mix(in_srgb,var(--g)_14%,transparent),transparent_72%)]">
+                      {g.id === 'arena' ? (
+                        <Image
+                          src={assetUrl('/images/shots/shot-game.jpg')}
+                          alt="BRUTAL ARENA — top-down wave shooter gameplay"
+                          fill
+                          className="object-cover opacity-75 transition-transform duration-500 group-hover:scale-105"
+                        />
+                      ) : (
+                        <div className="h-full w-full transition-transform duration-500 group-hover:scale-[1.06]">
+                          <Art />
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-[var(--bg-soft)] via-transparent to-transparent" />
+                      <span
+                        className="absolute left-3 top-3 rounded border bg-[var(--bg)]/80 px-2 py-0.5 text-[9px] font-bold tracking-[0.25em] backdrop-blur"
+                        style={{ borderColor: `${accent}88`, color: accent }}
+                      >
+                        {g.tag}
+                      </span>
+                    </div>
+
+                    <div className="p-5">
+                      <h3 className="font-display text-2xl tracking-tight text-[var(--ink)]">
+                        BRUTAL <span style={{ color: accent }}>//</span> {g.name}
+                      </h3>
+                      <p className="mt-2 text-xs leading-relaxed text-[var(--ink-dim)]">{g.desc}</p>
+                      <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] tracking-[0.2em] text-[var(--ink-faint)]">
+                        {g.meta.map((m) => (
+                          <span key={m} className="flex items-center gap-3">
+                            <span className="transition-colors group-hover:text-[var(--ink-dim)]">{m}</span>
+                            <span className="opacity-40">·</span>
+                          </span>
+                        ))}
+                        <span
+                          className="ml-auto flex items-center gap-1 font-black transition-all group-hover:gap-2"
+                          style={{ color: accent }}
+                        >
+                          PLAY <ChevronRight className="h-3.5 w-3.5" />
+                        </span>
+                      </div>
+                    </div>
+                  </Link>
+                </Reveal>
+              )
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* ========================================================== STATS */}
+      <section ref={statsRef.ref} className="border-y border-[var(--line)] bg-[var(--bg-soft)] py-14">
+        <div className="mx-auto grid max-w-7xl grid-cols-2 gap-8 px-4 md:grid-cols-4 md:px-6">
+          {[
+            { label: 'RUNS LOGGED', value: totals?.runs ?? 0, icon: Activity },
+            { label: 'THINGS KILLED', value: totals?.kills ?? 0, icon: Skull },
+            { label: 'GAMES IN THE PIT', value: 5, icon: Swords },
+            { label: 'WORLD RECORD', value: totals?.top ?? 0, icon: Trophy },
+          ].map((s, i) => (
+            <div key={s.label} className={cn(i > 0 && 'md:border-l md:border-[var(--line)] md:pl-8')}>
+              <s.icon className="h-5 w-5 text-[var(--accent)]" />
+              <div className="font-display mt-3 text-4xl tracking-tight text-[var(--ink)] md:text-5xl">
+                <CountUp target={s.value} active={statsRef.inView} />
+              </div>
+              <div className="mt-1 text-[10px] tracking-[0.3em] text-[var(--ink-faint)]">{s.label}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ======================================================= BESTIARY */}
+      <section id="bestiary" className="scroll-mt-20 py-20 md:py-28">
+        <div className="mx-auto max-w-7xl px-4 md:px-6">
+          <Reveal>
+            <div className="text-[10px] tracking-[0.4em] text-[var(--accent)]">02 / KNOW YOUR ENEMY</div>
+            <h2 className="font-display mt-2 text-5xl tracking-tight text-[var(--ink)] md:text-7xl">
+              THE BESTIARY
+            </h2>
+            <p className="mt-3 max-w-md text-xs leading-relaxed text-[var(--ink-faint)]">
+              Arena regulars. Learn what each one wants — usually you, in small
+              pieces.
+            </p>
+          </Reveal>
+
+          <div className="mt-12 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
+            {BESTIARY.map((b, i) => (
+              <Reveal key={b.name} delay={i * 60}>
+                <div className="group h-full rounded border border-[var(--line)] bg-[var(--bg-soft)] p-4 transition-all hover:-translate-y-1 hover:border-[var(--line-strong)]">
+                  <div className="transition-transform duration-300 group-hover:scale-110 group-hover:rotate-6">
+                    <EnemyGlyph shape={b.shape} color={b.color} />
+                  </div>
+                  <div className="mt-3 flex items-center justify-between">
+                    <span className="text-xs font-black tracking-widest text-[var(--ink)]">{b.name}</span>
+                    <span className="flex gap-0.5" aria-label={`threat ${b.threat} of 5`}>
+                      {[...Array(5)].map((_, d) => (
+                        <span
+                          key={d}
+                          className={cn('h-1.5 w-1.5 rounded-full', d < b.threat ? 'bg-[var(--accent)]' : 'bg-[var(--line)]')}
+                        />
+                      ))}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-[10px] leading-relaxed text-[var(--ink-faint)]">{b.desc}</p>
                 </div>
-                <div className="mt-1 flex items-baseline gap-3">
-                  <span className="text-2xl font-black text-amber-400">
-                    LEVEL {lvl.level}
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ========================================================= HOW TO */}
+      <section id="howto" className="scroll-mt-20 border-y border-[var(--line)] bg-[var(--bg-soft)] py-20 md:py-28">
+        <div className="mx-auto max-w-7xl px-4 md:px-6">
+          <Reveal>
+            <div className="text-[10px] tracking-[0.4em] text-[var(--accent)]">03 / THE RULES ARE SIMPLE</div>
+            <h2 className="font-display mt-2 text-5xl tracking-tight text-[var(--ink)] md:text-7xl">
+              60-SECOND BRIEFING
+            </h2>
+          </Reveal>
+
+          <div className="mt-12 grid gap-5 md:grid-cols-3">
+            {[
+              {
+                n: '01',
+                t: 'PICK A WEAPON',
+                d: 'Arena for gunplay, Stack for calm hands, Reflex for pure timing, Dodge for one-button chaos, Merge for the thinker\u2019s pit.',
+                icon: Swords,
+              },
+              {
+                n: '02',
+                t: 'LEARN ONE VERB',
+                d: 'Every game runs on one or two inputs: move, tap, hold. WASD + mouse in the Arena, everything else is a single button.',
+                icon: MousePointerClick,
+              },
+              {
+                n: '03',
+                t: 'DIE. REPEAT. ASCEND.',
+                d: 'Death is a 0.4-second loading screen. Retry instantly, climb the global boards, stack killstreaks and XP as you go.',
+                icon: Flame,
+              },
+            ].map((s, i) => (
+              <Reveal key={s.n} delay={i * 80}>
+                <div className="relative h-full overflow-hidden rounded border border-[var(--line)] bg-[var(--bg)] p-6">
+                  <span aria-hidden className="font-display absolute -right-3 -top-7 text-9xl text-[var(--ink)] opacity-[0.05]">
+                    {s.n}
                   </span>
-                  <span className="text-[11px] tracking-widest text-stone-500">
+                  <s.icon className="h-6 w-6 text-[var(--accent)]" />
+                  <h3 className="font-display mt-4 text-2xl tracking-tight text-[var(--ink)]">{s.t}</h3>
+                  <p className="mt-3 text-xs leading-relaxed text-[var(--ink-dim)]">{s.d}</p>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+
+          {/* per-game one-liners */}
+          <Reveal delay={120}>
+            <div className="mt-8 grid gap-2 md:grid-cols-5">
+              {GAMES.map((g) => (
+                <Link
+                  key={g.id}
+                  href={g.href}
+                  className="group flex items-center justify-between rounded border border-[var(--line)] bg-[var(--bg)] px-3.5 py-3 text-[10px] tracking-[0.2em] transition-all hover:border-[color:var(--g)]"
+                  style={{ ['--g' as string]: accentFor(g, theme) }}
+                >
+                  <span className="font-black" style={{ color: accentFor(g, theme) }}>
+                    {g.name}
+                  </span>
+                  <ChevronRight className="h-3.5 w-3.5 text-[var(--ink-faint)] transition-all group-hover:translate-x-1" />
+                </Link>
+              ))}
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ==================================================== LEADERBOARD */}
+      <section id="leaderboard" className="scroll-mt-20 py-20 md:py-28">
+        <div className="mx-auto max-w-7xl px-4 md:px-6">
+          <Reveal>
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <div className="text-[10px] tracking-[0.4em] text-[var(--accent)]">04 / HALL OF PAIN</div>
+                <h2 className="font-display mt-2 text-5xl tracking-tight text-[var(--ink)] md:text-7xl">
+                  LEADERBOARDS
+                </h2>
+              </div>
+              {boardMode === 'local' && (
+                <span className="rounded border border-[var(--line-strong)] px-2.5 py-1 text-[9px] tracking-[0.25em] text-[var(--ink-faint)]">
+                  LOCAL BOARD — SERVER OFFLINE
+                </span>
+              )}
+            </div>
+          </Reveal>
+
+          {/* tabs */}
+          <Reveal>
+            <div className="mt-8 flex flex-wrap gap-2">
+              {GAMES.map((g) => {
+                const active = g.id === activeGame
+                const accent = accentFor(g, theme)
+                return (
+                  <button
+                    key={g.id}
+                    type="button"
+                    onClick={() => setActiveGame(g.id)}
+                    className={cn(
+                      'h-10 rounded-none border px-5 text-[11px] font-black tracking-[0.25em] transition-all',
+                      active
+                        ? 'text-[var(--bg)]'
+                        : 'border-[var(--line)] bg-transparent text-[var(--ink-dim)] hover:border-[var(--line-strong)] hover:text-[var(--ink)]',
+                    )}
+                    style={active ? { backgroundColor: accent, borderColor: accent } : undefined}
+                  >
+                    {g.name}
+                  </button>
+                )
+              })}
+            </div>
+          </Reveal>
+
+          <Reveal delay={80}>
+            <div className="mt-6 overflow-hidden rounded border border-[var(--line)] bg-[var(--bg-soft)]">
+              {boardLoading ? (
+                <div className="py-16 text-center text-[11px] tracking-[0.3em] text-[var(--ink-faint)]">
+                  FETCHING CORPSES…
+                </div>
+              ) : board.length > 0 ? (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-[var(--line)] text-[9px] tracking-[0.3em] text-[var(--ink-faint)]">
+                      <th className="px-5 py-3 text-left font-normal">RANK</th>
+                      <th className="px-5 py-3 text-left font-normal">CALLSIGN</th>
+                      <th className="px-5 py-3 text-right font-normal">SCORE</th>
+                      <th className="hidden px-5 py-3 text-right font-normal sm:table-cell">
+                        {activeMeta.boardCols[0]}
+                      </th>
+                      <th className="hidden px-5 py-3 text-right font-normal sm:table-cell">
+                        {activeMeta.boardCols[1]}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {board.map((e, i) => (
+                      <tr
+                        key={e.id}
+                        className="border-b border-[var(--line)] transition-colors last:border-0 hover:bg-[var(--bg)]"
+                      >
+                        <td className="px-5 py-3 text-[var(--ink-faint)]">
+                          {i === 0 ? (
+                            <span style={{ color: accentFor(activeMeta, theme) }}>#01</span>
+                          ) : (
+                            `#${String(i + 1).padStart(2, '0')}`
+                          )}
+                        </td>
+                        <td className="px-5 py-3 font-bold text-[var(--ink)]">{e.name}</td>
+                        <td className="px-5 py-3 text-right font-black" style={{ color: accentFor(activeMeta, theme) }}>
+                          {e.score.toLocaleString()}
+                        </td>
+                        <td className="hidden px-5 py-3 text-right text-[var(--ink-dim)] sm:table-cell">
+                          {activeMeta.fmtWave(e.wave)}
+                        </td>
+                        <td className="hidden px-5 py-3 text-right text-[var(--ink-dim)] sm:table-cell">
+                          {activeMeta.fmtKills(e.kills)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div className="py-16 text-center text-[11px] tracking-[0.3em] text-[var(--ink-faint)]">
+                  NO RUNS LOGGED FOR {activeMeta.name} — BE THE FIRST
+                </div>
+              )}
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ==================================================== PILOT CARD */}
+      {returning && lvl && pilot && (
+        <section className="border-t border-[var(--line)] bg-[var(--bg-soft)] py-12">
+          <div className="mx-auto max-w-7xl px-4 md:px-6">
+            <div className="flex flex-col items-start justify-between gap-6 rounded border border-amber-900/40 bg-[var(--bg)] p-6 md:flex-row md:items-center">
+              <div>
+                <div className="text-[10px] tracking-[0.35em] text-amber-500/80">WELCOME BACK, PILOT</div>
+                <div className="mt-1 flex items-baseline gap-3">
+                  <span className="font-display text-3xl text-amber-400">LEVEL {lvl.level}</span>
+                  <span className="text-[11px] tracking-widest text-[var(--ink-faint)]">
                     {pilot.runs} RUNS · {pilot.totalKills.toLocaleString()} KILLS ·{' '}
                     {fmtDuration(pilot.timePlayed)} IN THE PIT
                   </span>
                 </div>
-                <div className="mt-3 h-2 w-64 max-w-full overflow-hidden rounded-sm bg-stone-900">
+                <div className="mt-3 h-2 w-72 max-w-full overflow-hidden bg-[var(--line)]">
                   <div
-                    className="h-full bg-gradient-to-r from-amber-600 to-amber-400"
+                    className="h-full bg-gradient-to-r from-amber-600 to-amber-400 transition-all duration-1000"
                     style={{ width: `${Math.min(100, (lvl.into / lvl.need) * 100)}%` }}
                   />
                 </div>
-                <div className="mt-1.5 text-[10px] tracking-widest text-stone-600">
+                <div className="mt-1.5 text-[10px] tracking-widest text-[var(--ink-faint)]">
                   {lvl.into}/{lvl.need} XP · BEST COMBO ×{pilot.bestCombo} ·{' '}
                   {pilot.achievements.length}/{ACHIEVEMENTS.length} ACHIEVEMENTS
                 </div>
@@ -480,7 +1013,7 @@ export default function LandingPage() {
               <Link href="/play">
                 <Button
                   size="lg"
-                  className="h-12 border border-amber-600/60 bg-amber-600 px-8 font-black tracking-[0.2em] text-black hover:bg-amber-500"
+                  className="h-12 border border-amber-500 bg-amber-500 px-8 font-black tracking-[0.2em] text-black hover:bg-amber-400"
                 >
                   <Play className="mr-2 h-4 w-4" /> CONTINUE THE FIGHT
                 </Button>
@@ -490,347 +1023,51 @@ export default function LandingPage() {
         </section>
       )}
 
-      {/* --------------------------------------------------- FEATURES */}
-      <section id="features" className="border-b border-red-950/40 py-16">
-        <div className="mx-auto max-w-6xl px-4">
-          <div className="text-center">
-            <div className="text-[10px] tracking-[0.4em] text-red-500">WHAT MAKES IT BRUTAL</div>
-            <h2 className="mt-2 text-3xl font-black tracking-tight text-stone-100 md:text-4xl">
-              SIX WAYS TO DIE GLORIOUSLY
+      {/* ======================================================= FOOTER */}
+      <footer className="relative overflow-hidden border-t border-[var(--line)]">
+        <div className="mx-auto max-w-7xl px-4 py-20 text-center md:px-6 md:py-28">
+          <Reveal>
+            <div className="text-[10px] tracking-[0.4em] text-[var(--ink-faint)]">LAST CALL</div>
+            <h2 className="font-display mt-4 select-none text-[13vw] leading-[0.85] tracking-tight md:text-[7rem]">
+              <span className="block text-[var(--ink)]">STOP SCROLLING.</span>
+              <span className="brutal-outline block">START DYING.</span>
             </h2>
-          </div>
-          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {[
-              {
-                icon: Swords,
-                title: 'DRAFT UPGRADES',
-                desc: 'Clear a wave, pick 1 of 3 upgrades — 12 stackable builds from Rail Slugs to Orbital Saws. Every run plays different.',
-                accent: 'text-red-400',
-              },
-              {
-                icon: Skull,
-                title: '7 ENEMY TYPES',
-                desc: 'Grunt hordes, weaving darters, splitting blobs, burst-fire spitters, armored tanks — and the Brute every 5 waves.',
-                accent: 'text-red-400',
-              },
-              {
-                icon: Zap,
-                title: 'OVERDRIVE',
-                desc: 'Kills charge your meter. Press E: the world slows to 55%, your damage and fire rate double. Five seconds of godhood.',
-                accent: 'text-amber-400',
-              },
-              {
-                icon: Crosshair,
-                title: 'ELITE HUNTS',
-                desc: 'Golden-aura elites from wave 3: 2.2× HP, faster, worth 3× score. High risk, fat reward, louder explosions.',
-                accent: 'text-amber-400',
-              },
-              {
-                icon: Activity,
-                title: 'COMBO STREAKS',
-                desc: 'Chain kills without taking damage: KILLING SPREE → RAMPAGE → MASSACRE → UNSTOPPABLE. Score multipliers up to ×8.',
-                accent: 'text-red-400',
-              },
-              {
-                icon: Trophy,
-                title: 'RANK + LEVEL UP',
-                desc: 'Score = XP. Climb pilot levels, unlock 10 achievements, submit runs to the global top 10, and share your best death.',
-                accent: 'text-amber-400',
-              },
-            ].map((f) => (
-              <div
-                key={f.title}
-                className="group rounded border border-red-950/70 bg-black/40 p-5 transition-all hover:-translate-y-1 hover:border-red-800/70 hover:bg-red-950/20"
-              >
-                <f.icon className={`h-6 w-6 ${f.accent}`} />
-                <div className="mt-3 text-sm font-black tracking-widest text-stone-100">
-                  {f.title}
-                </div>
-                <p className="mt-2 text-xs leading-relaxed text-stone-400">{f.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ------------------------------------------------ SCREENSHOTS */}
-      <section className="border-b border-red-950/40 py-16">
-        <div className="mx-auto max-w-6xl px-4">
-          <div className="text-center">
-            <div className="text-[10px] tracking-[0.4em] text-red-500">CAPTURED IN THE PIT</div>
-            <h2 className="mt-2 text-3xl font-black tracking-tight text-stone-100 md:text-4xl">
-              THIS IS WHAT YOU&rsquo;RE UP AGAINST
-            </h2>
-          </div>
-          <div className="mt-10 grid gap-4 md:grid-cols-3">
-            {[
-              { src: assetUrl('/images/shots/shot-game.jpg'), label: 'WAVE 6 — FULL CONTACT', alt: 'Mid-run combat in the arena' },
-              { src: assetUrl('/images/shots/shot-boss.jpg'), label: 'THE BRUTE — WAVE 5 BOSS', alt: 'The Brute boss fight' },
-              { src: assetUrl('/images/shots/shot-menu.jpg'), label: 'PRE-DROP BRIEFING', alt: 'Pre-run briefing screen' },
-            ].map((s) => (
-              <figure
-                key={s.src}
-                className="group relative overflow-hidden rounded border border-red-950/70 bg-black/60"
-              >
-                <div className="relative aspect-video overflow-hidden">
-                  <Image
-                    src={s.src}
-                    alt={s.alt}
-                    fill
-                    sizes="(max-width: 768px) 100vw, 33vw"
-                    className="object-cover transition-transform duration-500 group-hover:scale-105"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-                </div>
-                <figcaption className="absolute bottom-0 left-0 right-0 px-3 py-2 text-[10px] tracking-[0.25em] text-stone-300">
-                  <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-red-500" />
-                  {s.label}
-                </figcaption>
-              </figure>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* --------------------------------------------------- BESTIARY */}
-      <section id="bestiary" className="border-b border-red-950/40 py-16">
-        <div className="mx-auto max-w-6xl px-4">
-          <div className="text-center">
-            <div className="text-[10px] tracking-[0.4em] text-red-500">FIELD INTELLIGENCE</div>
-            <h2 className="mt-2 text-3xl font-black tracking-tight text-stone-100 md:text-4xl">
-              KNOW YOUR ENEMY
-            </h2>
-          </div>
-
-          {/* boss art banner */}
-          <div className="relative mt-10 overflow-hidden rounded border border-red-900/60">
-            <Image
-              src={assetUrl("/images/boss_art.jpg")}
-              alt="The Brute — boss of the arena"
-              width={1600}
-              height={900}
-              className="h-56 w-full object-cover object-center opacity-90 md:h-72"
-            />
-            <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/25 to-transparent" />
-            <div className="absolute inset-0 flex flex-col justify-center px-6 md:px-10">
-              <div className="flex items-center gap-2 text-[10px] tracking-[0.35em] text-red-400">
-                <Skull className="h-4 w-4" /> END OF WAVE 5. 10. 15. 20…
-              </div>
-              <div className="mt-2 text-3xl font-black tracking-tight text-stone-100 md:text-5xl">
-                THE BRUTE
-              </div>
-              <p className="mt-2 max-w-sm text-xs leading-relaxed text-stone-300">
-                750+ HP. Radial bullet storms. Spawns grunt packs. Enrages below 30%
-                health. Killing it drops a full repair kit — if you live long enough
-                to grab it.
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {BESTIARY.map((b) => (
-              <div
-                key={b.name}
-                className="flex items-start gap-4 rounded border border-red-950/70 bg-black/40 p-4 transition-colors hover:border-red-900"
-              >
-                <EnemyGlyph shape={b.shape} color={b.color} />
-                <div className="min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-black tracking-widest" style={{ color: b.color }}>
-                      {b.name}
-                    </span>
-                    <span className="shrink-0 text-[9px] tracking-widest text-stone-600">
-                      {'▮'.repeat(b.threat)}
-                    </span>
-                  </div>
-                  <p className="mt-1.5 text-xs leading-relaxed text-stone-400">{b.desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ------------------------------------------------------ HOW TO */}
-      <section id="howto" className="border-b border-red-950/40 py-16">
-        <div className="mx-auto max-w-6xl px-4">
-          <div className="text-center">
-            <div className="text-[10px] tracking-[0.4em] text-red-500">ZERO TO KILLING IN 30 SECONDS</div>
-            <h2 className="mt-2 text-3xl font-black tracking-tight text-stone-100 md:text-4xl">
-              HOW TO PLAY
-            </h2>
-          </div>
-          <div className="mt-10 grid gap-4 md:grid-cols-3">
-            {[
-              {
-                n: '01',
-                title: 'MOVE & SHOOT',
-                body: 'WASD to move, mouse to aim, hold left-click to fire. On touch: left thumb moves, right thumb aims and fires. Dash with SPACE for invincibility frames.',
-              },
-              {
-                n: '02',
-                title: 'SURVIVE & DRAFT',
-                body: 'Every cleared wave offers 3 upgrades. Stack them into a build — multishot, piercing rails, orbiting sawblades. Elites glow gold: kill them for triple score.',
-              },
-              {
-                n: '03',
-                title: 'OVERDRIVE & RANK',
-                body: 'Kills fill the gold OVERDRIVE meter — press E for slow-mo double damage. Die, submit your score, earn XP, level up, run it back with R.',
-              },
-            ].map((s) => (
-              <div key={s.n} className="rounded border border-red-950/70 bg-black/40 p-5">
-                <div className="text-3xl font-black text-red-800">{s.n}</div>
-                <div className="mt-2 text-sm font-black tracking-widest text-stone-100">
-                  {s.title}
-                </div>
-                <p className="mt-2 text-xs leading-relaxed text-stone-400">{s.body}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ------------------------------------------------- LEADERBOARD */}
-      <section id="leaderboard" className="border-b border-red-950/40 py-16">
-        <div className="mx-auto max-w-3xl px-4">
-          <div className="text-center">
-            <div className="text-[10px] tracking-[0.4em] text-red-500">THE GLOBAL TOP 10</div>
-            <h2 className="mt-2 text-3xl font-black tracking-tight text-stone-100 md:text-4xl">
-              CLAIM YOUR CALLSIGN
-            </h2>
-            <p className="mt-3 text-xs leading-relaxed text-stone-500">
-              Player-submitted after real deaths. The board is live — one good run
-              puts you on it.
-            </p>
-          </div>
-          <div className="mt-8 rounded border border-red-950/80 bg-black/50 p-4">
-            {board.length === 0 ? (
-              <div className="py-8 text-center text-xs tracking-widest text-stone-600">
-                NO SURVIVORS LOGGED YET —{' '}
-                <Link href="/play" className="text-red-400 hover:text-red-300">
-                  BE THE FIRST
-                </Link>
-              </div>
-            ) : (
-              <table className="w-full text-xs">
-                <tbody>
-                  {board.map((e, i) => (
-                    <tr key={e.id} className="border-b border-red-950/40 last:border-0">
-                      <td className="py-2 pr-3 text-stone-600">
-                        {String(i + 1).padStart(2, '0')}
-                      </td>
-                      <td className="py-2 pr-3 font-bold text-stone-200">{e.name}</td>
-                      <td className="py-2 text-right text-amber-500">
-                        {e.score.toLocaleString()}
-                      </td>
-                      <td className="py-2 pl-3 text-right text-stone-500">W{e.wave}</td>
-                      <td className="py-2 pl-3 text-right text-stone-500">
-                        {e.kills} KILLS
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-          <div className="mt-6 text-center">
-            <Link href="/play">
-              <Button
-                size="lg"
-                className="h-12 border border-red-500/60 bg-red-600 px-10 font-black tracking-[0.2em] text-white hover:bg-red-500"
-              >
-                <Play className="mr-2 h-4 w-4" /> PUT ME ON THAT BOARD
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* -------------------------------------------------- FINAL CTA */}
-      <section className="relative overflow-hidden py-24">
-        <div className="absolute inset-0">
-          <Image
-            src={assetUrl("/images/arena_bg.jpg")}
-            alt=""
-            fill
-            className="object-cover object-bottom opacity-30"
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-[#070709] via-[#070709]/70 to-[#070709]" />
-        </div>
-        <div className="brutal-scanline" />
-        <div className="relative mx-auto max-w-4xl px-4 text-center">
-          <div className="text-[10px] tracking-[0.4em] text-red-500">NO EXCUSES LEFT</div>
-          <h2 className="mt-3 text-4xl font-black leading-tight tracking-tighter text-stone-100 md:text-6xl">
-            STOP READING.
-            <br />
-            <span className="text-red-500">START SHOOTING.</span>
-          </h2>
-          <p className="mx-auto mt-4 max-w-md text-sm leading-relaxed text-stone-400">
-            The arena is open right now. It&rsquo;s free, it&rsquo;s fast, and it&rsquo;s
-            already counting your deaths.
-          </p>
-          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Link href="/play">
-              <Button
-                size="lg"
-                className="brutal-glow h-14 w-72 border border-red-500/70 bg-red-600 text-base font-black tracking-[0.2em] text-white hover:bg-red-500"
-              >
-                <Play className="mr-2 h-5 w-5" /> PLAY FREE NOW
-              </Button>
-            </Link>
-            <Link href="/play?wave=5">
-              <Button
-                size="lg"
-                variant="outline"
-                className="h-14 w-72 border-amber-800/70 bg-black/50 text-sm font-black tracking-[0.2em] text-amber-400 hover:border-amber-500 hover:text-amber-300"
-              >
-                <ZapIcon className="mr-2 h-4 w-4" /> STRAIGHT TO THE BRUTE
-              </Button>
-            </Link>
-          </div>
-          <div className="mt-6 flex flex-col items-center gap-2">
-            <Badge variant="outline" className="border-red-900/60 text-[10px] tracking-[0.25em] text-stone-500">
-              AVG RUN: 3 MIN · MOBILE FRIENDLY · SCREENSHAKE INCLUDED
-            </Badge>
-            <Link
-              href="/stack"
-              className="inline-flex items-center gap-1.5 text-[11px] tracking-[0.25em] text-stone-500 transition-colors hover:text-amber-400"
-            >
-              <Layers className="h-3.5 w-3.5" /> NO PATIENCE? ONE-TAP STACK GAME
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* ------------------------------------------------------ FOOTER */}
-      <footer className="border-t border-red-950/50 py-8">
-        <div className="mx-auto flex max-w-6xl flex-col items-center gap-3 px-4 text-center">
-          <div className="flex items-center gap-2">
-            <span className="flex h-6 w-6 items-center justify-center rounded-sm bg-red-600 text-[10px] font-black text-white">
-              B//
-            </span>
-            <span className="text-xs font-black tracking-[0.25em] text-stone-400">
-              BRUTAL<span className="text-red-500">//</span>ARENA
-            </span>
-          </div>
-          <p className="max-w-xl text-[10px] leading-relaxed tracking-wider text-stone-600">
-            A fan-made arena shooter tribute to BRUTAL, the open-source C# game
-            framework by ahwoo — github.com/ahwootech/BRUTAL. Not affiliated, just
-            respect. Built with a canvas engine, WebAudio synth SFX, and a leaderboard
-            that never lies.
-          </p>
-          <div className="flex flex-wrap items-center justify-center gap-4 text-[10px] tracking-[0.2em] text-stone-600">
-            {rewardsEnabled && (
-              <Link href="/rewards" className="text-amber-600 transition-colors hover:text-amber-500">
-                REWARDS PROGRAM
+            <div className="mt-10">
+              <Link href="/play">
+                <Button
+                  size="lg"
+                  className="brutal-glow h-16 border border-[var(--accent)] bg-[var(--accent)] px-14 text-lg font-black tracking-[0.25em] text-white hover:brightness-110"
+                >
+                  <Play className="mr-3 h-6 w-6" /> ENTER THE ARENA
+                </Button>
               </Link>
-            )}
-            <Link href="/terms" className="transition-colors hover:text-stone-400">
-              TERMS
-            </Link>
-            <Link href="/privacy" className="transition-colors hover:text-stone-400">
-              PRIVACY
-            </Link>
+            </div>
+          </Reveal>
+        </div>
+
+        <div className="border-t border-[var(--line)] bg-[var(--bg-soft)] py-3" aria-hidden>
+          <Marquee items={['DIE LOUD', 'RETRY FAST', 'CLIMB HIGH', 'BRUTAL FOREVER']} reverse duration={22} />
+        </div>
+
+        <div className="border-t border-[var(--line)]">
+          <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-4 py-8 text-[10px] tracking-[0.25em] text-[var(--ink-faint)] md:flex-row md:px-6">
+            <div className="flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-sm bg-[var(--accent)] text-[9px] font-black text-white">
+                B//
+              </span>
+              BRUTAL//GAMES — FAN-MADE TRIBUTE TO BRUTAL BY AHWOO
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
+              <Link href="/privacy" className="transition-colors hover:text-[var(--ink)]">PRIVACY</Link>
+              <Link href="/terms" className="transition-colors hover:text-[var(--ink)]">TERMS</Link>
+              {rewardsEnabled && (
+                <Link href="/rewards" className="text-amber-500 transition-colors hover:text-amber-400">
+                  REWARDS
+                </Link>
+              )}
+              <a href="#games" className="transition-colors hover:text-[var(--ink)]">ALL GAMES</a>
+              <ThemeToggle />
+            </div>
           </div>
         </div>
       </footer>

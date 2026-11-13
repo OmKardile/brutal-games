@@ -4,6 +4,7 @@
 import { Sfx } from './audio'
 import { GamepadReader, type PadSnapshot } from './gamepad'
 import { UPGRADES, defaultStats } from './upgrades'
+import { paletteFor, type GameThemeMode } from './theme'
 import type { GameEvent, GamePhase, PlayerStats, RunStats, UpgradeDef } from './types'
 
 const ARENA_W = 1600
@@ -183,6 +184,7 @@ export class BrutalGame {
   private destroyed = false
 
   private view = { w: 0, h: 0, scale: 1, ox: 0, oy: 0, dpr: 1 }
+  private pal = paletteFor('arena', 'night')
   private vignette: CanvasGradient | null = null
 
   phase: GamePhase = 'menu'
@@ -490,6 +492,13 @@ export class BrutalGame {
     this.sfx.muted = m
   }
 
+  /** NIGHT / DAY palette swap — rebakes the floor scrim for the new mode. */
+  setTheme(mode: GameThemeMode) {
+    this.pal = paletteFor('arena', mode)
+    this.bakeBg()
+    this.resize()
+  }
+
   unlockAudio() {
     this.sfx.unlock()
   }
@@ -596,11 +605,12 @@ export class BrutalGame {
     const dw = img.width * s
     const dh = img.height * s
     g.drawImage(img, (ARENA_W - dw) / 2, (ARENA_H - dh) / 2, dw, dh)
-    // darken so entities read clearly
-    g.fillStyle = 'rgba(7,7,10,0.74)'
+    // darken (night) / frost (day) so entities read clearly
+    const night = this.pal.theme === 'night'
+    g.fillStyle = night ? 'rgba(7,7,10,0.74)' : 'rgba(239,236,227,0.84)'
     g.fillRect(0, 0, ARENA_W, ARENA_H)
     // faint grid keeps motion legible
-    g.strokeStyle = 'rgba(255,255,255,0.028)'
+    g.strokeStyle = night ? 'rgba(255,255,255,0.028)' : 'rgba(27,25,23,0.06)'
     g.lineWidth = 1
     g.beginPath()
     for (let x = 0; x <= ARENA_W; x += 80) {
@@ -612,7 +622,7 @@ export class BrutalGame {
       g.lineTo(ARENA_W, y)
     }
     g.stroke()
-    g.strokeStyle = 'rgba(255,50,50,0.045)'
+    g.strokeStyle = night ? 'rgba(255,50,50,0.045)' : 'rgba(180,30,30,0.08)'
     g.beginPath()
     for (let x = 0; x <= ARENA_W; x += 400) {
       g.moveTo(x, 0)
@@ -1569,7 +1579,7 @@ export class BrutalGame {
     this.view.oy = (h - ARENA_H * scale) / 2
     const g = this.ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.36, w / 2, h / 2, Math.max(w, h) * 0.72)
     g.addColorStop(0, 'rgba(0,0,0,0)')
-    g.addColorStop(1, 'rgba(0,0,0,0.52)')
+    g.addColorStop(1, this.pal.theme === 'night' ? 'rgba(0,0,0,0.52)' : 'rgba(87,74,52,0.26)')
     this.vignette = g
     if (!this.mouse.seen) {
       this.mouse.x = w / 2
@@ -1614,7 +1624,7 @@ export class BrutalGame {
     const ctx = this.ctx
     const { w, h } = this.view
     this.applyScreen()
-    ctx.fillStyle = '#070709'
+    ctx.fillStyle = this.pal.bg
     ctx.fillRect(0, 0, w, h)
 
     this.applyWorld()
@@ -1666,10 +1676,10 @@ export class BrutalGame {
     if (this.bg) {
       ctx.drawImage(this.bg, 0, 0)
     } else {
-      ctx.fillStyle = '#0b0b0e'
+      ctx.fillStyle = this.pal.raise
       ctx.fillRect(0, 0, ARENA_W, ARENA_H)
       // minor grid
-      ctx.strokeStyle = 'rgba(255,255,255,0.032)'
+      ctx.strokeStyle = this.pal.grid
       ctx.lineWidth = 1
       ctx.beginPath()
       for (let x = 0; x <= ARENA_W; x += 80) {

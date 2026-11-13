@@ -17,6 +17,8 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { RewardsHud } from '@/components/RewardsHud'
+import { ThemeToggle } from '@/components/ThemeToggle'
+import { useTheme } from '@/lib/theme'
 import { useToast } from '@/hooks/use-toast'
 import { subscribeGamepads } from '@/game/gamepad'
 import {
@@ -60,6 +62,7 @@ export default function PlayPage() {
   const unlockedThisRunRef = useRef<Set<string>>(new Set())
 
   const { toast } = useToast()
+  const { theme } = useTheme()
 
   const [phase, setPhase] = useState<GamePhase>('menu')
   const [choices, setChoices] = useState<UpgradeDef[]>([])
@@ -161,6 +164,7 @@ export default function PlayPage() {
       }
     })
     engineRef.current = engine
+    engine.setTheme(theme)
     // hydrate pilot AFTER mount to avoid SSR/client mismatch
     setPilot({ ...pilotRef.current })
     try {
@@ -190,6 +194,11 @@ export default function PlayPage() {
       setPadId(id)
     })
   }, [])
+
+  // live NIGHT/DAY switch — engine re-renders with the new palette next frame
+  useEffect(() => {
+    engineRef.current?.setTheme(theme)
+  }, [theme])
 
   const start = () => {
     engineRef.current?.unlockAudio()
@@ -251,7 +260,7 @@ export default function PlayPage() {
   const showCornerControls = phase !== 'menu'
 
   return (
-    <main className="relative h-dvh w-full select-none overflow-hidden bg-[#070709] font-mono text-stone-200">
+    <main className="relative h-dvh w-full select-none overflow-hidden bg-[var(--bg)] font-mono text-[var(--ink)]">
       <canvas
         ref={canvasRef}
         className="absolute inset-0 block h-full w-full touch-none"
@@ -264,9 +273,10 @@ export default function PlayPage() {
       {/* corner controls */}
       {showCornerControls && (
         <div className="absolute right-3 top-3 z-20 flex gap-2">
+          <ThemeToggle className="h-9 w-16" />
           {padConnected && (
             <div
-              className="flex h-9 items-center gap-1.5 rounded border border-amber-800/60 bg-black/50 px-2.5 text-[9px] tracking-widest text-amber-400"
+              className="flex h-9 items-center gap-1.5 rounded border border-amber-800/60 bg-[var(--panel)] px-2.5 text-[9px] tracking-widest text-amber-400"
               title={padId || 'gamepad connected'}
             >
               <Gamepad2 className="h-3.5 w-3.5" />
@@ -276,7 +286,7 @@ export default function PlayPage() {
           <Button
             size="icon"
             variant="outline"
-            className="h-9 w-9 border-red-900/60 bg-black/50 text-stone-300 hover:bg-red-950/60 hover:text-red-400"
+            className="h-9 w-9 border-red-900/60 bg-[var(--panel)] text-[var(--ink-dim)] hover:bg-red-950/60 hover:text-red-400"
             onClick={toggleMute}
             aria-label={muted ? 'Unmute' : 'Mute'}
           >
@@ -286,7 +296,7 @@ export default function PlayPage() {
             <Button
               size="icon"
               variant="outline"
-              className="h-9 w-9 border-red-900/60 bg-black/50 text-stone-300 hover:bg-red-950/60 hover:text-red-400"
+              className="h-9 w-9 border-red-900/60 bg-[var(--panel)] text-[var(--ink-dim)] hover:bg-red-950/60 hover:text-red-400"
               onClick={() => engineRef.current?.togglePause()}
               aria-label="Pause"
             >
@@ -297,7 +307,7 @@ export default function PlayPage() {
             <Button
               size="icon"
               variant="outline"
-              className="h-9 w-9 border-red-900/60 bg-black/50 text-stone-300 hover:bg-red-950/60 hover:text-red-400"
+              className="h-9 w-9 border-red-900/60 bg-[var(--panel)] text-[var(--ink-dim)] hover:bg-red-950/60 hover:text-red-400"
               onClick={() => engineRef.current?.quitToMenu()}
               aria-label="Back to menu"
             >
@@ -309,12 +319,12 @@ export default function PlayPage() {
 
       {/* ---------------------------------------------------------- MENU */}
       {phase === 'menu' && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center overflow-y-auto bg-gradient-to-b from-black/70 via-black/50 to-black/80 px-4 py-8">
+        <div className="absolute inset-0 z-10 flex items-center justify-center overflow-y-auto bg-[var(--overlay)] px-4 py-8">
           <div className="w-full max-w-3xl">
             <div className="text-center">
               <Link
                 href="/"
-                className="mx-auto mb-4 inline-flex items-center gap-1.5 rounded border border-stone-800/80 bg-black/70 px-3 py-1.5 text-[10px] tracking-[0.3em] text-stone-400 transition-colors hover:border-red-800 hover:text-red-400"
+                className="mx-auto mb-4 inline-flex items-center gap-1.5 rounded border border-[var(--line-strong)] bg-[var(--overlay)] px-3 py-1.5 text-[10px] tracking-[0.3em] text-[var(--ink-dim)] transition-colors hover:border-red-800 hover:text-red-400"
               >
                 <ArrowLeft className="h-3 w-3" /> BACK TO SITE
               </Link>
@@ -333,30 +343,30 @@ export default function PlayPage() {
                 </span>
                 <span className="relative text-red-500">BRUTAL</span>
               </h1>
-              <p className="mt-2 text-[11px] tracking-[0.35em] text-stone-400 md:text-xs">
+              <p className="mt-2 text-[11px] tracking-[0.35em] text-[var(--ink-dim)] md:text-xs">
                 SURVIVE THE WAVES · DRAFT UPGRADES · KILL THE BRUTE
               </p>
             </div>
 
             {/* pilot card */}
-            <div className="mt-6 rounded border border-amber-900/50 bg-black/60 p-4">
+            <div className="mt-6 rounded border border-amber-900/50 bg-[var(--panel)] p-4">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2 text-xs tracking-widest text-stone-400">
+                <div className="flex items-center gap-2 text-xs tracking-widest text-[var(--ink-dim)]">
                   <Trophy className="h-4 w-4 text-amber-500" /> PILOT LEVEL{' '}
                   <span className="text-lg font-black text-amber-400">{lvl.level}</span>
                 </div>
-                <div className="text-[10px] tracking-widest text-stone-500">
+                <div className="text-[10px] tracking-widest text-[var(--ink-dim)]">
                   {pilot.runs} RUNS · {pilot.totalKills.toLocaleString()} KILLS ·{' '}
                   {achCount}/{ACHIEVEMENTS.length} ACHIEVEMENTS
                 </div>
               </div>
-              <div className="h-2.5 w-full overflow-hidden rounded-sm bg-stone-900">
+              <div className="h-2.5 w-full overflow-hidden rounded-sm bg-[var(--line)]">
                 <div
                   className="h-full bg-gradient-to-r from-amber-600 to-amber-400 transition-all"
                   style={{ width: `${Math.min(100, (lvl.into / lvl.need) * 100)}%` }}
                 />
               </div>
-              <div className="mt-1.5 flex items-center justify-between text-[10px] tracking-widest text-stone-500">
+              <div className="mt-1.5 flex items-center justify-between text-[10px] tracking-widest text-[var(--ink-dim)]">
                 <span>
                   {lvl.into} / {lvl.need} XP
                 </span>
@@ -372,7 +382,7 @@ export default function PlayPage() {
                       className={`flex items-center gap-1.5 rounded border px-2 py-1 text-[9px] tracking-wider ${
                         got
                           ? 'border-amber-800/60 bg-amber-950/30 text-amber-400'
-                          : 'border-stone-800 bg-black/50 text-stone-500'
+                          : 'border-[var(--line)] bg-[var(--panel)] text-[var(--ink-dim)]'
                       }`}
                     >
                       {got ? <Zap className="h-3 w-3 shrink-0" /> : <Lock className="h-3 w-3 shrink-0" />}
@@ -393,24 +403,24 @@ export default function PlayPage() {
                 START RUN
               </Button>
               {best > 0 && (
-                <div className="text-xs tracking-widest text-stone-500">
+                <div className="text-xs tracking-widest text-[var(--ink-dim)]">
                   LOCAL BEST <span className="text-amber-500">{String(best).padStart(6, '0')}</span>
                 </div>
               )}
               <Link
                 href="/stack"
-                className="inline-flex items-center gap-1.5 pt-1 text-[11px] tracking-[0.25em] text-stone-500 transition-colors hover:text-red-400"
+                className="inline-flex items-center gap-1.5 pt-1 text-[11px] tracking-[0.25em] text-[var(--ink-dim)] transition-colors hover:text-red-400"
               >
                 <Layers className="h-3.5 w-3.5" /> NEW — ONE-TAP TOWER: BRUTAL//STACK
               </Link>
             </div>
 
             <div className="mt-6 grid gap-3 md:grid-cols-3">
-              <div className="rounded border border-red-950/80 bg-black/60 p-4">
-                <div className="mb-3 flex items-center gap-2 text-xs tracking-widest text-stone-400">
+              <div className="rounded border border-red-950/80 bg-[var(--panel)] p-4">
+                <div className="mb-3 flex items-center gap-2 text-xs tracking-widest text-[var(--ink-dim)]">
                   <Keyboard className="h-4 w-4 text-red-500" /> KEYBOARD + MOUSE
                 </div>
-                <ul className="space-y-1.5 text-xs text-stone-300">
+                <ul className="space-y-1.5 text-xs text-[var(--ink-dim)]">
                   <li>
                     <span className="text-red-400">WASD / ARROWS</span> — move
                   </li>
@@ -430,11 +440,11 @@ export default function PlayPage() {
                   </li>
                 </ul>
               </div>
-              <div className="rounded border border-red-950/80 bg-black/60 p-4">
-                <div className="mb-3 flex items-center gap-2 text-xs tracking-widest text-stone-400">
+              <div className="rounded border border-red-950/80 bg-[var(--panel)] p-4">
+                <div className="mb-3 flex items-center gap-2 text-xs tracking-widest text-[var(--ink-dim)]">
                   <Smartphone className="h-4 w-4 text-red-500" /> TOUCH
                 </div>
-                <ul className="space-y-1.5 text-xs text-stone-300">
+                <ul className="space-y-1.5 text-xs text-[var(--ink-dim)]">
                   <li>
                     <span className="text-red-400">LEFT THUMB</span> — virtual stick to move
                   </li>
@@ -448,21 +458,21 @@ export default function PlayPage() {
                   <li>Pick upgrades between waves — 1 / 2 / 3 keys</li>
                 </ul>
               </div>
-              <div className="rounded border border-red-950/80 bg-black/60 p-4">
+              <div className="rounded border border-red-950/80 bg-[var(--panel)] p-4">
                 <div className="mb-3 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 text-xs tracking-widest text-stone-400">
+                  <div className="flex items-center gap-2 text-xs tracking-widest text-[var(--ink-dim)]">
                     <Gamepad2 className="h-4 w-4 text-red-500" /> GAMEPAD
                   </div>
                   <span
                     className={`text-[9px] tracking-widest ${
-                      padConnected ? 'text-emerald-400' : 'text-stone-600'
+                      padConnected ? 'text-emerald-400' : 'text-[var(--ink-faint)]'
                     }`}
                     title={padConnected ? padId : 'plug in a pad and press any button'}
                   >
                     {padConnected ? 'LINKED' : 'PRESS ANY BUTTON'}
                   </span>
                 </div>
-                <ul className="space-y-1.5 text-xs text-stone-300">
+                <ul className="space-y-1.5 text-xs text-[var(--ink-dim)]">
                   <li>
                     <span className="text-red-400">LEFT STICK / D-PAD</span> — move
                   </li>
@@ -484,9 +494,9 @@ export default function PlayPage() {
               </div>
             </div>
 
-            <p className="mt-6 text-center text-[10px] leading-relaxed tracking-wider text-stone-500">
+            <p className="mt-6 text-center text-[10px] leading-relaxed tracking-wider text-[var(--ink-dim)]">
               A fan-made arena shooter tribute to{' '}
-              <span className="text-stone-500">BRUTAL</span>, the open-source C# game
+              <span className="text-[var(--ink-dim)]">BRUTAL</span>, the open-source C# game
               framework by ahwoo (github.com/ahwootech/BRUTAL). Not affiliated — just
               respect.
             </p>
@@ -496,13 +506,13 @@ export default function PlayPage() {
 
       {/* ------------------------------------------------------- UPGRADE */}
       {phase === 'upgrade' && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center overflow-y-auto bg-black/75 px-4 py-8 backdrop-blur-[2px]">
+        <div className="absolute inset-0 z-10 flex items-center justify-center overflow-y-auto bg-[var(--overlay)] px-4 py-8 backdrop-blur-[2px]">
           <div className="w-full max-w-4xl">
             <div className="mb-6 text-center">
               <div className="flex items-center justify-center gap-2 text-xs tracking-[0.4em] text-red-500">
                 <Skull className="h-4 w-4" /> WAVE CLEARED
               </div>
-              <h2 className="mt-2 text-3xl font-black tracking-tight text-stone-100 md:text-4xl">
+              <h2 className="mt-2 text-3xl font-black tracking-tight text-[var(--ink)] md:text-4xl">
                 CHOOSE YOUR UPGRADE
               </h2>
             </div>
@@ -510,7 +520,7 @@ export default function PlayPage() {
               {choices.map((c, i) => (
                 <button
                   key={c.id}
-                  className="group relative rounded border border-red-950/80 bg-black/70 p-5 text-left transition-all hover:-translate-y-1 hover:border-red-500/80 hover:bg-red-950/30 hover:shadow-[0_0_30px_rgba(239,68,68,0.25)] focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                  className="group relative rounded border border-red-950/80 bg-[var(--overlay)] p-5 text-left transition-all hover:-translate-y-1 hover:border-red-500/80 hover:bg-red-950/30 hover:shadow-[0_0_30px_rgba(239,68,68,0.25)] focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
                   onClick={() => engineRef.current?.pickUpgrade(c.id)}
                 >
                   <div className="mb-3 flex items-center justify-between">
@@ -528,14 +538,14 @@ export default function PlayPage() {
                     >
                       {c.tag}
                     </Badge>
-                    <span className="text-[10px] tracking-widest text-stone-600 group-hover:text-stone-400">
+                    <span className="text-[10px] tracking-widest text-[var(--ink-faint)] group-hover:text-[var(--ink-dim)]">
                       [{i + 1}]
                     </span>
                   </div>
-                  <div className="text-sm font-black tracking-wide text-stone-100 group-hover:text-white">
+                  <div className="text-sm font-black tracking-wide text-[var(--ink)] group-hover:text-white">
                     {c.name}
                   </div>
-                  <p className="mt-2 text-xs leading-relaxed text-stone-400">{c.desc}</p>
+                  <p className="mt-2 text-xs leading-relaxed text-[var(--ink-dim)]">{c.desc}</p>
                 </button>
               ))}
             </div>
@@ -545,10 +555,10 @@ export default function PlayPage() {
 
       {/* --------------------------------------------------------- PAUSED */}
       {phase === 'paused' && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/75 backdrop-blur-[2px]">
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-[var(--overlay)] backdrop-blur-[2px]">
           <div className="text-center">
-            <h2 className="text-4xl font-black tracking-[0.3em] text-stone-100">PAUSED</h2>
-            <p className="mt-2 text-xs tracking-widest text-stone-500">
+            <h2 className="text-4xl font-black tracking-[0.3em] text-[var(--ink)]">PAUSED</h2>
+            <p className="mt-2 text-xs tracking-widest text-[var(--ink-dim)]">
               THE ARENA WAITS FOR NO ONE
             </p>
             <div className="mt-8 flex flex-col items-center gap-3">
@@ -562,7 +572,7 @@ export default function PlayPage() {
               <Button
                 size="lg"
                 variant="outline"
-                className="h-10 w-64 border-red-950 bg-transparent text-stone-400 hover:border-red-800 hover:text-stone-200"
+                className="h-10 w-64 border-red-950 bg-transparent text-[var(--ink-dim)] hover:border-red-800 hover:text-[var(--ink)]"
                 onClick={() => engineRef.current?.quitToMenu()}
               >
                 ABANDON RUN
@@ -574,7 +584,7 @@ export default function PlayPage() {
 
       {/* ------------------------------------------------------ GAME OVER */}
       {phase === 'gameover' && overStats && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center overflow-y-auto bg-black/80 px-4 py-8 backdrop-blur-[2px]">
+        <div className="absolute inset-0 z-10 flex items-center justify-center overflow-y-auto bg-[var(--overlay)] px-4 py-8 backdrop-blur-[2px]">
           <div className="w-full max-w-2xl">
             <div className="text-center">
               <div className="flex items-center justify-center gap-2 text-xs tracking-[0.4em] text-red-600">
@@ -594,41 +604,41 @@ export default function PlayPage() {
             </div>
 
             <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-              <div className="rounded border border-red-950/80 bg-black/60 p-3 text-center">
-                <div className="text-[10px] tracking-widest text-stone-500">SCORE</div>
-                <div className="text-xl font-black text-stone-100">
+              <div className="rounded border border-red-950/80 bg-[var(--panel)] p-3 text-center">
+                <div className="text-[10px] tracking-widest text-[var(--ink-dim)]">SCORE</div>
+                <div className="text-xl font-black text-[var(--ink)]">
                   {String(overStats.score).padStart(6, '0')}
                 </div>
               </div>
-              <div className="rounded border border-red-950/80 bg-black/60 p-3 text-center">
-                <div className="text-[10px] tracking-widest text-stone-500">WAVE</div>
-                <div className="text-xl font-black text-stone-100">{overStats.wave}</div>
+              <div className="rounded border border-red-950/80 bg-[var(--panel)] p-3 text-center">
+                <div className="text-[10px] tracking-widest text-[var(--ink-dim)]">WAVE</div>
+                <div className="text-xl font-black text-[var(--ink)]">{overStats.wave}</div>
               </div>
-              <div className="rounded border border-red-950/80 bg-black/60 p-3 text-center">
-                <div className="text-[10px] tracking-widest text-stone-500">KILLS</div>
-                <div className="text-xl font-black text-stone-100">{overStats.kills}</div>
+              <div className="rounded border border-red-950/80 bg-[var(--panel)] p-3 text-center">
+                <div className="text-[10px] tracking-widest text-[var(--ink-dim)]">KILLS</div>
+                <div className="text-xl font-black text-[var(--ink)]">{overStats.kills}</div>
               </div>
-              <div className="rounded border border-red-950/80 bg-black/60 p-3 text-center">
-                <div className="flex items-center justify-center gap-1 text-[10px] tracking-widest text-stone-500">
+              <div className="rounded border border-red-950/80 bg-[var(--panel)] p-3 text-center">
+                <div className="flex items-center justify-center gap-1 text-[10px] tracking-widest text-[var(--ink-dim)]">
                   <Timer className="h-3 w-3" /> TIME
                 </div>
-                <div className="text-xl font-black text-stone-100">
+                <div className="text-xl font-black text-[var(--ink)]">
                   {fmtTime(overStats.timeAlive)}
                 </div>
               </div>
             </div>
 
             {/* xp gain */}
-            <div className="mt-3 rounded border border-amber-900/50 bg-black/60 p-4">
+            <div className="mt-3 rounded border border-amber-900/50 bg-[var(--panel)] p-4">
               <div className="mb-2 flex items-center justify-between text-[11px] tracking-widest">
                 <span className="text-amber-400">
                   +{xpGain} XP — PILOT LEVEL {lvl.level}
                 </span>
-                <span className="text-stone-500">
+                <span className="text-[var(--ink-dim)]">
                   {lvl.into} / {lvl.need} XP TO LEVEL {lvl.level + 1}
                 </span>
               </div>
-              <div className="h-2.5 w-full overflow-hidden rounded-sm bg-stone-900">
+              <div className="h-2.5 w-full overflow-hidden rounded-sm bg-[var(--line)]">
                 <div
                   className="h-full bg-gradient-to-r from-amber-600 to-amber-400"
                   style={{ width: `${Math.min(100, (lvl.into / lvl.need) * 100)}%` }}
@@ -652,7 +662,7 @@ export default function PlayPage() {
               )}
             </div>
 
-            <div className="mt-4 rounded border border-red-950/80 bg-black/60 p-4">
+            <div className="mt-4 rounded border border-red-950/80 bg-[var(--panel)] p-4">
               {!submitted ? (
                 <form
                   className="flex flex-col gap-3 sm:flex-row"
@@ -666,7 +676,7 @@ export default function PlayPage() {
                     onChange={(e) => setName(e.target.value.slice(0, 16))}
                     placeholder="CALLSIGN"
                     maxLength={16}
-                    className="h-11 flex-1 border-red-900/60 bg-black/60 font-bold tracking-widest text-stone-100 placeholder:text-stone-700 focus-visible:ring-red-500"
+                    className="h-11 flex-1 border-red-900/60 bg-[var(--panel)] font-bold tracking-widest text-[var(--ink)] placeholder:text-[var(--ink-faint)] focus-visible:ring-red-500"
                     aria-label="Callsign for the leaderboard"
                   />
                   <Button
@@ -686,7 +696,7 @@ export default function PlayPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-8 border-red-950 bg-transparent text-[11px] tracking-widest text-stone-400 hover:border-red-800 hover:text-stone-200"
+                  className="h-8 border-red-950 bg-transparent text-[11px] tracking-widest text-[var(--ink-dim)] hover:border-red-800 hover:text-[var(--ink)]"
                   onClick={() => void shareScore()}
                 >
                   <Share2 className="mr-1.5 h-3.5 w-3.5" /> SHARE THIS RUN
@@ -698,14 +708,14 @@ export default function PlayPage() {
                     <tbody>
                       {board.map((e, i) => (
                         <tr key={e.id} className="border-b border-red-950/40 last:border-0">
-                          <td className="py-1.5 pr-2 text-stone-600">
+                          <td className="py-1.5 pr-2 text-[var(--ink-faint)]">
                             {String(i + 1).padStart(2, '0')}
                           </td>
-                          <td className="py-1.5 pr-2 font-bold text-stone-200">{e.name}</td>
+                          <td className="py-1.5 pr-2 font-bold text-[var(--ink)]">{e.name}</td>
                           <td className="py-1.5 text-right text-amber-500">
                             {String(e.score).padStart(6, '0')}
                           </td>
-                          <td className="py-1.5 pl-3 text-right text-stone-500">W{e.wave}</td>
+                          <td className="py-1.5 pl-3 text-right text-[var(--ink-dim)]">W{e.wave}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -725,7 +735,7 @@ export default function PlayPage() {
               <Button
                 size="lg"
                 variant="outline"
-                className="h-12 w-64 border-red-950 bg-transparent font-bold tracking-widest text-stone-400 hover:border-red-800 hover:text-stone-200"
+                className="h-12 w-64 border-red-950 bg-transparent font-bold tracking-widest text-[var(--ink-dim)] hover:border-red-800 hover:text-[var(--ink)]"
                 onClick={() => engineRef.current?.quitToMenu()}
               >
                 MAIN MENU

@@ -11,6 +11,7 @@
 // (src/app/stack/page.tsx) and receive events through the callback.
 
 import { GamepadReader, type PadSnapshot } from './gamepad'
+import { paletteFor, type GamePalette, type GameThemeMode } from './theme'
 
 export type StackPhase = 'idle' | 'playing' | 'over'
 
@@ -180,7 +181,6 @@ class StackAudio {
 
 // ------------------------------------------------------------------ engine
 
-const BG = '#070709'
 const BLOCK_H_RATIO = 0.24 // block height relative to base size
 
 export class StackGame {
@@ -194,6 +194,7 @@ export class StackGame {
   private dead = false
   private pad = new GamepadReader()
   private padSnap: PadSnapshot | null = null
+  private pal: GamePalette = paletteFor('stack', 'night')
 
   // layout (px, css units)
   private W = 0
@@ -262,6 +263,11 @@ export class StackGame {
 
   setMuted(m: boolean): void {
     this.audio.muted = m
+  }
+
+  /** NIGHT / DAY palette swap — the tower's red/amber identity stays. */
+  setTheme(mode: GameThemeMode): void {
+    this.pal = paletteFor('stack', mode)
   }
 
   /** Begin (or restart) a run. */
@@ -464,8 +470,8 @@ export class StackGame {
       this.pad.rumble(Math.min(0.5, 0.18 + this.streak * 0.05), 0.6, 70)
       this.rings.push({ x: newX, z: newZ, w: newW, d: newD, y: this.topY, life: 0.5 })
       const label = this.streak >= 2 ? `PERFECT ×${this.streak}` : 'PERFECT'
-      this.addPopup(newX, newZ, this.topY, label, this.streak >= 2 ? '#fbbf24' : '#fafafa', 13)
-      this.spawnSparks(newX, newZ, this.topY, 8, '#fafafa')
+      this.addPopup(newX, newZ, this.topY, label, this.streak >= 2 ? '#fbbf24' : this.pal.pop, 13)
+      this.spawnSparks(newX, newZ, this.topY, 8, this.pal.pop)
       this.shake(0.06, 2.5)
     } else {
       this.audio.drop()
@@ -675,7 +681,8 @@ export class StackGame {
 
   private drawBackground(dt: number): void {
     const ctx = this.ctx
-    ctx.fillStyle = BG
+    const night = this.pal.theme === 'night'
+    ctx.fillStyle = this.pal.bg
     ctx.fillRect(0, 0, this.W, this.H)
 
     // vignette
@@ -687,8 +694,8 @@ export class StackGame {
       this.H * 0.5,
       Math.max(this.W, this.H) * 0.85,
     )
-    grad.addColorStop(0, 'rgba(30, 12, 12, 0.35)')
-    grad.addColorStop(1, 'rgba(0, 0, 0, 0.55)')
+    grad.addColorStop(0, night ? 'rgba(30, 12, 12, 0.35)' : 'rgba(120, 53, 15, 0.08)')
+    grad.addColorStop(1, night ? 'rgba(0, 0, 0, 0.55)' : 'rgba(87, 74, 52, 0.2)')
     ctx.fillStyle = grad
     ctx.fillRect(0, 0, this.W, this.H)
 
@@ -704,8 +711,8 @@ export class StackGame {
     const yBotView = this.camY - this.H * 0.85
     const kStart = Math.max(1, Math.ceil((yBotView - this.BH) / step))
     const kEnd = Math.ceil((yTopView - this.BH) / step)
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)'
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.14)'
+    ctx.strokeStyle = night ? 'rgba(255, 255, 255, 0.05)' : 'rgba(27, 25, 23, 0.12)'
+    ctx.fillStyle = night ? 'rgba(255, 255, 255, 0.14)' : 'rgba(27, 25, 23, 0.34)'
     ctx.font = '700 9px ui-monospace, Menlo, monospace'
     ctx.textAlign = 'left'
     for (let k = kStart; k <= kEnd; k++) {
