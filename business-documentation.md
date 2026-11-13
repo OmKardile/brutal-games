@@ -33,9 +33,16 @@ stats) voids points and freezes accounts after human review.
 3. **Preview** shows the full distribution: per-player raw share, cap clamps, leftover.
 4. **Lock** — snapshot is immutable. Leftover from cap clamps stays in the pool (unpaid),
    shown in the preview. Players see the credited amount in `/rewards`.
-5. **Players request payouts** to a UPI ID. Requires: verified email, 18+ declaration,
-   amount ≥ minimum threshold (₹100 default; smaller balances carry over), no other
-   pending request. Requests are captcha-guarded.
+5. **Players request payouts** to a UPI ID. Requirements (0.9-0.10 hardening):
+   verified email, 18+ declaration, amount ≥ minimum threshold (₹100 default;
+   smaller balances carry over), no other pending request, account ≥72h old,
+   play on ≥3 different days, no HIGH risk score (explainable flag score —
+   see docs/anti-cheat.md), and a UPI destination not linked to any other
+   account (one destination per account; pooling attempts are flagged).
+   Requests are captcha-guarded and idempotent (replays return the original).
+   New accounts (<48h) earn at half the daily cap (cooling).
+   **Kill switch:** REWARDS_PAYOUTS_PAUSED freezes payout creation + approval
+   at runtime without touching point earning (admin SETTINGS tab).
 6. **Hold period** (default 14 days from request, snapshotted per request) before an
    admin may approve.
 7. **Admin approves, pays manually via UPI, marks paid** with the transaction reference.
@@ -52,7 +59,8 @@ confirmed after lock, the admin rejects that player's pending payout for the mon
 3. Scan the preview: player count, cap clamps, leftover, any FROZEN players.
 4. Review the FLAGS tab first if anything looks off; freeze/void as needed (users tab).
 5. LOCK the month.
-6. Work the PAYOUTS tab: after each request's hold expires, approve → pay via UPI →
+6. Work the PAYOUTS tab (requires admin 2FA — see below): after each
+   request's hold expires, approve → pay via UPI →
    mark paid with the reference. Reject (with reason) anything suspicious.
 7. Run `bun run db:backup` and store the file.
 
@@ -60,6 +68,15 @@ confirmed after lock, the admin rejects that player's pending payout for the mon
 
 - All fraud signals are flag-only → manual review; nothing auto-pays or auto-freezes.
 - Suspicious payouts sit in the hold period; admins can reject any time.
+- **Admin access since 0.9.2:** mandatory TOTP 2FA (password + 6-digit code
+  at login; enrollment forced on first console visit), 1-hour admin
+  sessions, optional ADMIN_IP_ALLOWLIST. Self-approval of your own payout is
+  blocked; above TWO_PERSON_THRESHOLD_MINOR a second, DIFFERENT admin must
+  finalize (off by default while there is a single admin). Every action is
+  in the append-only AUDIT tab. Monthly money checks:
+  GET /api/admin/reconciliation (Σ payouts vs Σ credited — mismatch alerts
+  fire when ALERT_WEBHOOK_URL is set). Incident procedures:
+  docs/incident-runbook.md.
 - One account per person (device + IP clustering checks), verified email for payouts,
   18+ declaration for earning and payouts.
 - Master kill-switch: `REWARDS_ENABLED` off stops all earning and hides all reward UI.
