@@ -15,6 +15,7 @@ import { useSession } from '@/hooks/use-session'
 import { fmtMinor, fmtDate, fmtDateTime } from '@/lib/rewards/format'
 import {
   ArrowLeft,
+  BarChart3,
   Coins,
   Flag,
   Lock,
@@ -337,13 +338,14 @@ function AdminConsole({ tab, setTab }: { tab: string; setTab: (t: string) => voi
         </div>
 
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="grid h-auto w-full grid-cols-7 gap-1 rounded border border-stone-800/80 bg-black/60 p-1">
+          <TabsList className="grid h-auto w-full grid-cols-8 gap-1 rounded border border-stone-800/80 bg-black/60 p-1">
             {[
               { v: 'pool', icon: Coins, label: 'POOL' },
               { v: 'payouts', icon: Wallet, label: 'PAYOUTS' },
               { v: 'flags', icon: Flag, label: 'FLAGS' },
               { v: 'boards', icon: Trophy, label: 'BOARDS' },
               { v: 'users', icon: Users, label: 'USERS' },
+              { v: 'stats', icon: BarChart3, label: 'STATS' },
               { v: 'audit', icon: ScrollText, label: 'AUDIT' },
               { v: 'settings', icon: Settings, label: 'SETTINGS' },
             ].map((t) => (
@@ -361,10 +363,135 @@ function AdminConsole({ tab, setTab }: { tab: string; setTab: (t: string) => voi
           <TabsContent value="flags"><FlagsTab /></TabsContent>
           <TabsContent value="boards"><BoardsTab /></TabsContent>
           <TabsContent value="users"><UsersTab /></TabsContent>
+          <TabsContent value="stats"><StatsTab /></TabsContent>
           <TabsContent value="audit"><AuditTab /></TabsContent>
           <TabsContent value="settings"><SettingsTab /></TabsContent>
         </Tabs>
     </>
+  )
+}
+
+// ---------------------------------------------------------------- stats (slice 0)
+
+interface StatsDay {
+  dateKey: string
+  players: number
+  returning: number
+  d1: number
+}
+
+interface StatsReport {
+  tz: string
+  days: StatsDay[]
+  totals: {
+    avgDau: number
+    bestDau: number
+    bestDauDate: string | null
+    avgD1: number
+    runsTotal: number
+    rankedShare: number
+  }
+}
+
+function StatsTab() {
+  const [days, setDays] = useState('30')
+  const [report, setReport] = useState<StatsReport | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const load = useCallback(async (d: string) => {
+    setBusy(true)
+    try {
+      const res = await fetch(`/api/admin/stats?days=${encodeURIComponent(d)}`, { cache: 'no-store' })
+      if (res.ok) setReport((await res.json()) as StatsReport)
+    } finally {
+      setBusy(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void load(days)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  return (
+    <div className="rounded border border-stone-800/80 bg-black/40 p-4">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="text-xs font-black tracking-[0.3em] text-stone-400">
+          RETENTION READ-OUT <span className="text-stone-600">(DAU · D1 COHORTS)</span>
+        </div>
+        <div className="flex items-center gap-2 text-[10px] tracking-widest text-stone-500">
+          <span>WINDOW</span>
+          {['7', '30', '90'].map((d) => (
+            <Button
+              key={d}
+              size="sm"
+              variant="outline"
+              className={`h-7 px-2 text-[10px] ${days === d ? 'border-red-800 text-red-400' : 'border-stone-800 text-stone-500'}`}
+              onClick={() => {
+                setDays(d)
+                void load(d)
+              }}
+            >
+              {d}D
+            </Button>
+          ))}
+          {busy && <span className="text-stone-600">…</span>}
+        </div>
+      </div>
+
+      {report ? (
+        <>
+          <div className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-4">
+            {[
+              { label: 'AVG DAU', value: report.totals.avgDau },
+              {
+                label: 'BEST DAU',
+                value: report.totals.bestDau,
+                sub: report.totals.bestDauDate ?? undefined,
+              },
+              { label: 'AVG D1 %', value: `${report.totals.avgD1}%` },
+              { label: 'RANKED SHARE', value: `${report.totals.rankedShare}%` },
+            ].map((c) => (
+              <div key={c.label} className="rounded border border-stone-800/80 bg-black/60 p-3">
+                <div className="text-[9px] tracking-[0.25em] text-stone-600">{c.label}</div>
+                <div className="mt-1 text-xl font-black text-red-400">{c.value}</div>
+                {c.sub && <div className="text-[9px] text-stone-600">{c.sub}</div>}
+              </div>
+            ))}
+          </div>
+          <div className="text-[9px] tracking-[0.2em] text-stone-600">
+            D1 = SHARE OF A DAY'S PLAYERS SEEN AGAIN LATER IN THE WINDOW · TZ {report.tz} ·
+            RUNS {report.totals.runsTotal} · GUESTS COUNTED BY NAME KEY
+          </div>
+          <div className="mt-3 max-h-72 overflow-y-auto rounded border border-stone-800/80">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-black/80">
+                <tr className="text-left text-[9px] tracking-[0.25em] text-stone-500">
+                  <th className="px-3 py-2">DAY</th>
+                  <th className="px-3 py-2 text-right">PLAYERS</th>
+                  <th className="px-3 py-2 text-right">RETURNED</th>
+                  <th className="px-3 py-2 text-right">D1 %</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.days.map((d) => (
+                  <tr key={d.dateKey} className="border-t border-stone-800/60">
+                    <td className="px-3 py-1.5 font-mono text-stone-400">{d.dateKey}</td>
+                    <td className="px-3 py-1.5 text-right text-stone-300">{d.players}</td>
+                    <td className="px-3 py-1.5 text-right text-stone-500">{d.returning}</td>
+                    <td className="px-3 py-1.5 text-right text-red-400">{d.d1}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : (
+        <div className="py-8 text-center text-[10px] tracking-[0.3em] text-stone-600">
+          {busy ? 'COMPUTING COHORTS…' : 'NO DATA — TRY ANOTHER WINDOW'}
+        </div>
+      )}
+    </div>
   )
 }
 

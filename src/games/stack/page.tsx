@@ -27,6 +27,7 @@ import {
   type BoardResult,
 } from '@/lib/scores-client'
 import { beginRun, endRun } from '@/lib/run-session-client'
+import { mutatorFor, applyMutator, type DailyMutator } from '@/lib/daily/mutators'
 import { RankAuthHint } from '@/components/portal/RankAuthHint'
 import {
   ArrowLeft,
@@ -76,6 +77,10 @@ export default function StackRunner({ stage }: { stage?: StageProps }) {
   const [newBest, setNewBest] = useState(false)
   const [padConnected, setPadConnected] = useState(false)
   const [padId, setPadId] = useState('')
+  /** the day's mutator (null on classic days / casual runs) */
+  const [mutator, setMutator] = useState<DailyMutator | null>(null)
+  const mutatorRef = useRef<DailyMutator | null>(null)
+  mutatorRef.current = mutator
 
   // gamepad start/retry reads the live phase through a ref (callback is bound once)
   const phaseRef = useRef<PagePhase>('menu')
@@ -164,6 +169,9 @@ export default function StackRunner({ stage }: { stage?: StageProps }) {
         onGameEvent: (ev) => handleEvent(ev as StackEvent),
       },
     })
+    // reflect the day's mutator in the runner (label + live score shape)
+    const mut = stage?.daily?.mutator ? mutatorFor('stack', stage.daily.mutator) : null
+    setMutator(mut && mut.id !== 'none' ? mut : null)
     const handle = createGame(ctx)
     engineRef.current = handle
     handle.setTheme(theme)
@@ -257,7 +265,9 @@ export default function StackRunner({ stage }: { stage?: StageProps }) {
   const shareScore = async () => {
     if (!overStats) return
     const url = `${window.location.origin}/games/stack`
-    const text = `I stacked ${overStats.score} blocks (${overStats.perfects} perfect drops, best streak ×${overStats.bestStreak}) in BRUTAL//STACK. Beat that. ${url}`
+    const dailyMut = mutatorRef.current
+    const mutText = dailyMut ? ` (today: ${dailyMut.label})` : ''
+    const text = `I stacked ${overStats.score} blocks (${overStats.perfects} perfect drops, best streak ×${overStats.bestStreak})${mutText} in BRUTAL//STACK. Beat that. ${url}`
     try {
       if (navigator.share) {
         await navigator.share({ title: 'BRUTAL//STACK', text })
@@ -311,6 +321,11 @@ export default function StackRunner({ stage }: { stage?: StageProps }) {
             <div className="text-5xl font-black tabular-nums tracking-tighter text-[var(--ink)] md:text-6xl">
               {String(score).padStart(3, '0')}
             </div>
+            {mutator && (
+              <div className="mt-1 text-[9px] font-black tracking-[0.3em] text-amber-400/90">
+                {mutator.label} · {mutator.rule.toUpperCase()}
+              </div>
+            )}
             {streak >= 2 && (
               <div className="mt-1 text-xs font-black tracking-[0.3em] text-amber-400">
                 PERFECT ×{streak}
@@ -468,8 +483,18 @@ export default function StackRunner({ stage }: { stage?: StageProps }) {
 
             <div className="mt-6 grid grid-cols-3 gap-3">
               <div className="rounded border border-red-950/80 bg-[var(--panel)] p-3 text-center">
-                <div className="text-[10px] tracking-widest text-[var(--ink-dim)]">HEIGHT</div>
-                <div className="text-xl font-black text-[var(--ink)]">{overStats.score}</div>
+                <div className="text-[10px] tracking-widest text-[var(--ink-dim)]">
+                  {mutator ? mutator.label : 'HEIGHT'}
+                </div>
+                <div className="text-xl font-black text-[var(--ink)]">
+                  {mutator
+                    ? applyMutator(mutator.id, {
+                        score: overStats.score,
+                        perfects: overStats.perfects,
+                        bestStreak: overStats.bestStreak,
+                      })
+                    : overStats.score}
+                </div>
               </div>
               <div className="rounded border border-red-950/80 bg-[var(--panel)] p-3 text-center">
                 <div className="text-[10px] tracking-widest text-[var(--ink-dim)]">PERFECTS</div>
@@ -480,6 +505,11 @@ export default function StackRunner({ stage }: { stage?: StageProps }) {
                 <div className="text-xl font-black text-[var(--ink)]">×{overStats.bestStreak}</div>
               </div>
             </div>
+            {mutator && (
+              <div className="mt-2 text-center text-[10px] tracking-[0.2em] text-amber-500/90">
+                TODAY'S RULE — {mutator.rule} (HEIGHT {overStats.score} STILL COUNTED FOR THE ENGINE)
+              </div>
+            )}
 
             <div className="mt-4 rounded border border-red-950/80 bg-[var(--panel)] p-4">
               {!submitted ? (

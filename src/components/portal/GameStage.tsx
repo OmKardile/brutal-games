@@ -27,6 +27,7 @@ import {
 } from '@/game-kit'
 import { recallPlayerName } from '@/lib/scores-client'
 import { currentRunToken } from '@/lib/run-session-client'
+import { mutatorFor } from '@/lib/daily/mutators'
 import { useToast } from '@/hooks/use-toast'
 import type { GameSlug } from '@/games/types'
 import type { DailyInfo } from '@/games/runner-types'
@@ -142,8 +143,13 @@ export function GameStage(props: GameStageProps) {
     try {
       const res = await fetch(`/api/daily/seed?game=${slug}`, { cache: 'no-store' })
       if (res.ok) {
-        const data = (await res.json()) as { dateKey: string; seed: number }
-        return { dateKey: data.dateKey, seed: data.seed, ranked: true }
+        const data = (await res.json()) as { dateKey: string; seed: number; mutator?: string | null }
+        return {
+          dateKey: data.dateKey,
+          seed: data.seed,
+          ranked: true,
+          mutator: data.mutator ?? null,
+        }
       }
     } catch {
       // fall through to local fallback
@@ -251,8 +257,14 @@ export function GameStage(props: GameStageProps) {
       overdrivesUsed: 0,
       eliteKills: 0,
     })
-    if (dailyRef.current) void submitDailyRun(summary, log)
+    if (dailyRef.current) {
+      lastDailySummaryRef.current = summary
+      void submitDailyRun(summary, log)
+    }
   }
+
+  // remember the last daily summary for the challenge button (slice 1)
+  const lastDailySummaryRef = useRef<RunSummary | null>(null)
 
   onReadyRef.current = () => {
     setReady(true)
@@ -268,8 +280,30 @@ export function GameStage(props: GameStageProps) {
       onReady: () => onReadyRef.current(),
     }),
     // daily identity change is intentional (new challenge → fresh engine)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [daily],
+  )
+
+  // daily run ended → WhatsApp challenge (roadmap slice 1, the growth loop).
+  // wa.me deep links need no SDK; the ?daily= param re-opens the SAME seeded
+  // challenge for the recipient. The mutator label rides the text so the
+  // challenge reads as "today's special rule".
+  const challengeAFriend = useCallback(
+    (summary: RunSummary) => {
+      const info = dailyRef.current
+      if (!info) return
+      adapterRef.current?.trackEvent('share_click', { game: slug, kind: 'challenge' })
+      const mut = info.mutator ? mutatorFor(slug, info.mutator) : null
+      const mutatorText = mut && mut.id !== 'none' ? ` — today's rule: ${mut.label} (${mut.rule})` : ''
+      const url = `${window.location.origin}/games/${slug}?daily=1`
+      const text = `I scored ${summary.score} on today's ${shortName} daily${mutatorText}. Same seed for everyone — beat me if you can: ${url}`
+      const waUrl = `https://wa.me/?text=${encodeURIComponent(text)}`
+      window.open(waUrl, '_blank', 'noopener,noreferrer')
+      toast({
+        title: 'CHALLENGE SENT',
+        description: 'WhatsApp opened with today\'s seed. Forward it to your group.',
+      })
+    },
+    [slug, shortName, toast],
   )
 
   // stop recording when leaving the game
@@ -429,16 +463,34 @@ export function GameStage(props: GameStageProps) {
       {/* rewards HUD — passive; renders nothing while the program is off */}
       <RewardsHud phase={hudPhase} lastStats={lastStats} />
 
-      {/* daily banner */}
+      {/* daily banner (+ mutator label + challenge CTA — roadmap slice 1) */}
       {daily && (
         <div className="pointer-events-none absolute left-1/2 top-2 z-20 -translate-x-1/2 rounded border border-amber-700/60 bg-black/70 px-3 py-1 text-[9px] tracking-[0.3em] text-amber-400">
           DAILY · {daily.dateKey}
+          {daily.mutator && daily.mutator !== 'none' && (
+            <span className="ml-2 rounded-sm bg-amber-500/20 px-1.5 py-0.5 text-[8px] tracking-[0.2em] text-amber-300">
+              {mutatorFor(slug, daily.mutator).label}
+            </span>
+          )}
           {!daily.ranked && (
             <span className="ml-2 inline-flex items-center gap-1 text-amber-200/70">
               <WifiOff className="h-3 w-3" /> UNRANKED
             </span>
           )}
           {dailyRank && daily.ranked && <span className="ml-2 text-amber-200">BEST #{dailyRank}</span>}
+        </div>
+      )}
+
+      {/* WhatsApp challenge CTA — appears after a daily run ends (slice 1) */}
+      {daily && lastDailySummaryRef.current && hudPhase === 'gameover' && (
+        <div className="absolute bottom-2 left-1/2 z-20 -translate-x-1/2">
+          <Button
+            size="sm"
+            className="h-8 border border-emerald-600/60 bg-emerald-600/90 font-black tracking-[0.25em] text-white shadow-[0_0_18px_rgba(16,185,129,0.35)] hover:bg-emerald-500"
+            onClick={() => challengeAFriend(lastDailySummaryRef.current as RunSummary)}
+          >
+            CHALLENGE A FRIEND
+          </Button>
         </div>
       )}
 

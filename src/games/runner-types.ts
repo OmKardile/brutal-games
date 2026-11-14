@@ -9,6 +9,11 @@ export interface DailyInfo {
   seed: number
   /** false when the client fell back to a local seed (offline / API absent) */
   ranked: boolean
+  /**
+   * The day's mutator id (roadmap slice 1), derived server-side with the
+   * seed; null when the game has no mutator set. Label lookup: mutatorFor().
+   */
+  mutator?: string | null
 }
 
 export interface StageProps {

@@ -12,6 +12,7 @@ import {
 } from '@/lib/daily/board'
 import { extendStreak, mergeStreaks, type StreakState } from '@/lib/daily/streaks'
 import { dailySeedFor, seedMatches } from '@/lib/daily/seed'
+import { mutatorIdFor, mutatorPlausibilityMultiplier, gameHasMutators } from '@/lib/daily/mutators'
 import { dateKeyForTz, previousDateKey } from '@/lib/daily/tz'
 import { claimDailyScoreForSession } from '@/lib/rewards/heartbeat'
 import { userRisk } from '@/lib/risk'
@@ -96,8 +97,15 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // plausibility vs manifest (impossible scores rejected outright)
-  const verdict = checkPlausibility(game, { score: run.score, durationMs: run.durationMs })
+  // plausibility vs manifest (impossible scores rejected outright).
+  // Mutator days (slice 1) carry a per-mutator ceiling multiplier so a
+  // "perfect-heavy" double-scoring day does not flag honest runs as cheaters.
+  const dayMutator = gameHasMutators(run.game) ? mutatorIdFor(run.game, run.dateKey) : 'none'
+  const verdict = checkPlausibility(game, {
+    score: run.score,
+    durationMs: run.durationMs,
+    multiplier: mutatorPlausibilityMultiplier(dayMutator),
+  })
   if (!verdict.ok) {
     return NextResponse.json({ error: `Run rejected: ${verdict.reason}` }, { status: 422 })
   }

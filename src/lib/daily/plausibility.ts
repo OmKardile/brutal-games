@@ -10,6 +10,11 @@ import type { GameManifest } from '@/games/types'
 export interface RunPayload {
   score: number
   durationMs: number
+  /**
+   * Per-mutator ceiling multiplier (roadmap slice 1): a double-scoring
+   * mutator day must not flag honest runs. Defaults to 1 (classic days).
+   */
+  multiplier?: number
 }
 
 export type Verdict = { ok: true } | { ok: false; reason: string }
@@ -22,7 +27,7 @@ export function checkPlausibility(manifest: GameManifest, run: RunPayload): Verd
     return { ok: false, reason: `run shorter than ${manifest.minRunSeconds}s` }
   }
   const seconds = run.durationMs / 1000
-  const ceiling = manifest.maxScorePerSecond * (seconds + GRACE_SECONDS)
+  const ceiling = manifest.maxScorePerSecond * (seconds + GRACE_SECONDS) * (run.multiplier ?? 1)
   if (run.score > ceiling) {
     return { ok: false, reason: 'score implausible for duration' }
   }

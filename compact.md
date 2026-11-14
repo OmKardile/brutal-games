@@ -1,7 +1,8 @@
 # compact.md — project state snapshot
 
-Last updated: 2026-11-14 (v0.11.0 — post-security growth roadmap, ADR-029,
-docs only). Read this before working in the repo.
+Last updated: 2026-11-14 (v0.12.0 — growth slices 0+1: retention read-out +
+WhatsApp challenge loop + STACK daily mutators, ADR-029). Read this before
+working in the repo.
 
 ## What this is
 BRUTAL//GAMES — Next.js 16 browser arcade (fan tribute to github.com/ahwootech/BRUTAL):
@@ -55,14 +56,31 @@ player rewards program (monthly ad-revenue share, INR/UPI, manual payouts).
   play_start, run_end, daily_start, daily_complete, share_click, ad_shown,
   ad_failed. Consent banner ships disabled (NEXT_PUBLIC_CONSENT_BANNER=on).
 
-## Daily challenges (v0.7.0)
+## Daily challenges (v0.12.0)
 - Seed = FNV-1a(slug:dateKey:DAILY_SALT) server-side (falls back to
-  SESSION_SECRET; dev fallback warns). GET /api/daily/seed. Client offline
+  SESSION_SECRET; dev fallback warns). GET /api/daily/seed — response now
+  also carries `mutator` (null for games without a set). Client offline
   fallback seed → stored UNRANKED.
+- **Daily mutators (slice 1, STACK v1)**: five score-rule twists
+  (CLASSIC/PERFECT HEAVY/STREAK MASTER/TALL TOWER/COMBO HUNT), derived
+  server-side from `hashString(slug:mutator:dateKey:daily)` — same-day
+  same-mutator for everyone, zero storage, zero client trust. Transform
+  lives in the STACK shim summary() (engine untouched);
+  `/api/daily/run` scales the plausibility ceiling by
+  `mutatorPlausibilityMultiplier` (2 on perfect-heavy/combo-hunt days, else 1
+  — never tightens). Tests pin transform math + multiplier behavior.
+- **WhatsApp challenge loop (slice 1)**: after a daily run ends,
+  CHALLENGE A FRIEND opens `wa.me` with score + mutator + `?daily=1` deep
+  link (same seed for the recipient); share_click analytics ride the
+  existing adapter (kind=challenge).
 - POST /api/daily/run: zod + rate limit (12/min/IP) + today-only +
-  plausibility (manifest maxScorePerSecond/minRunSeconds + 5s grace) +
+  plausibility (manifest ceilings × mutator multiplier + 5s grace) +
   seed-match check. Input logs stored capped 16k chars, NOT verified (v1
   limitation, documented).
+- **Retention read-out (slice 0)**: GET /api/admin/stats?days=7|30|90 —
+  DAU/D1 cohorts/runs/ranked-share from DailyActivity ∪ DailyRun (guests by
+  name key, approximation documented in src/lib/daily/stats.ts); admin
+  `stats` tab renders it. No new tracking.
 - DailyRun append-only (best-per-player boards), DailyStreak (server for
   signed-in; guest localStorage `brutal.daily.streak`; merged on login —
   approximation documented in src/lib/daily/streaks.ts), PortalSetting KV.
@@ -179,13 +197,13 @@ NEXT_PUBLIC_ANALYTICS_ENDPOINT/SITE (optional), NEXT_PUBLIC_CONSENT_BANNER
   flags not auto-bans (only auto-HOLD at high risk); engines untouched.
 
 ## Known gaps / next steps
-- **The build queue is docs/roadmap.md (ADR-029)**: slice 0 (DAU/D1/D7
-  admin stats from existing tables) → slice 1 (WhatsApp challenge links +
-  STACK daily mutators with per-mutator plausibility multipliers, build
-  prompt embedded in the roadmap) → lite mode + PWA → festival calendar →
-  cosmetics/shields/goals/leagues/clips → LAST the determinization epic
-  (engine migration onto the kit loop = phase-7 replay verification AND
-  ghost races together). Five gates (G1-G5) sit between phases.
+- **The build queue is docs/roadmap.md (ADR-029)**: slices 0+1 SHIPPED
+  (v0.12.0 — stats read-out, WhatsApp challenge links, STACK mutators) →
+  next: slice 2 (lite mode + PWA) → slice 3 (festival calendar reusing the
+  mutator system) → cosmetics/shields/goals/leagues/clips → LAST the
+  determinization epic (engine migration onto the kit loop = phase-7 replay
+  verification AND ghost races together). Five gates (G1-G5) sit between
+  phases; G1 traffic proof now has its instrument (the stats tab).
 - Engine migration onto the kit loop (now phase H of the roadmap — unlocks
   full determinism + replay verification).
 - Poki/CrazyGames stubs must be finished ONLY against their official SDK docs.

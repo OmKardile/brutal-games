@@ -3,6 +3,40 @@
 All notable changes to BRUTAL//GAMES. Dates are UTC. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions are ours, not semver-strict.
 
+## [0.12.0] — 2026-11-14
+
+### Growth roadmap slices 0+1 (ADR-029): retention read-out + WhatsApp challenge loop + daily mutators
+
+**Slice 0 — retention read-out (the measurement half).**
+- `src/lib/daily/stats.ts`: DAU per day, D1 cohorts (share of a day's players
+  seen again later in the window), run totals + ranked share — computed from
+  EXISTING tables (DailyActivity ∪ DailyRun). No new tracking, no client
+  telemetry. Guests counted by name key (approximation documented).
+- `GET /api/admin/stats?days=7|30|90` — role-guarded, zod-validated,
+  rate-limited. New admin `stats` tab renders the window, avg/best DAU,
+  avg D1, ranked share and the per-day table.
+
+**Slice 1 — the growth loop.**
+- WhatsApp challenge links: after a daily run ends, a CHALLENGE A FRIEND
+  button opens `wa.me` with the score + the day's mutator + a `?daily=1`
+  deep link (same seeded challenge for the recipient). share_click analytics
+  ride the existing adapter. No SDK, no new API.
+- Daily mutators (STACK v1, five): CLASSIC / PERFECT HEAVY / STREAK MASTER /
+  TALL TOWER / COMBO HUNT — score-rule twists derived server-side from the
+  same seed hash family (`mutatorIdFor`), served by `/api/daily/seed`, applied
+  in the STACK shim's `summary()` (engine untouched — house rule). Live
+  label + rule in the runner HUD, mutator score on the game-over card,
+  mutator in the daily banner and share texts.
+- Per-mutator plausibility multipliers: `/api/daily/run` scales the manifest
+  ceiling by `mutatorPlausibilityMultiplier(dayMutator)` — double-scoring
+  days no longer flag honest runs; classic days unchanged (×1). Engines
+  without mutator sets are unaffected.
+- Tests: `tests/growth.test.ts` (13) — derivation determinism + rotation
+  spread, exact transform math, multiplier never tightens, doubled honest
+  scores pass / absurd scores still rejected, retention cohorts against a
+  throwaway DB (DAU/D1/runs/ranked-share, pending/removed invisible).
+  Suite: 238 pass (26-attack abuse suite green against the fresh build).
+
 ## [0.11.0] — 2026-11-14
 
 ### Planning — post-security growth roadmap (docs only)

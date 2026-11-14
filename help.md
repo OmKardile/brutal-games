@@ -118,6 +118,18 @@ consecutive days build a streak. Offline runs use a local seed and are marked
 UNRANKED. Daily leaderboard rank never pays anything — it's pure bragging
 rights.
 
+**What are mutators?**
+Some days the STACK daily runs a special scoring rule — PERFECT HEAVY (perfect
+drops count double), STREAK MASTER (your best streak IS the score), and
+similar. The mutator is derived from the day's seed server-side, so everyone
+plays the same twist. The label shows in-game and on the daily banner, and the
+scoring ceiling scales with it — an honest great run is never flagged.
+
+**How do I challenge a friend?**
+Finish a daily run and hit CHALLENGE A FRIEND — WhatsApp opens with your
+score, the day's mutator and a link that opens the SAME seeded challenge for
+them. Same seed, same rules: the score gap is pure skill.
+
 **The game won't load / is slow.**
 Games load ONLY when you press PLAY (that's by design — the page stays light).
 If it's still slow: close heavy tabs, avoid low-power mode, try day mode, or

@@ -17,7 +17,11 @@ Five free browser games in one brutal arcade — a fan-made tribute to
 Every game runs in night and day mode (live-switchable, canvases included), on keyboard,
 mouse, touch and gamepad (twin-stick + rumble) — plug in a pad and press any button to link it.
 Daily challenges (`/daily`): same seed for everyone that day, per-game daily leaderboard,
-streaks, Wordle-style share.
+streaks, Wordle-style share, WhatsApp challenge links (`?daily=1` deep link — same
+seed for the recipient) and daily mutators for STACK (server-derived score-rule
+twists like PERFECT HEAVY or STREAK MASTER; the plausibility ceiling scales with
+them so honest runs are never flagged). Admins get a retention read-out
+(DAU/D1 cohorts) computed from existing tables — no new tracking.
 
 Plus an optional rewards program: players earn points for genuine play and receive a
 proportional share of a monthly revenue pool. Rewards: `/rewards` (needs an account).

@@ -54,7 +54,7 @@ export interface GameCtx {
   /** the rule-enforced portal adapter — the only door to the outside world */
   adapter: PortalAdapter & { rules: AdRules }
   /** set when this run is a daily challenge (seeded, same for everyone) */
-  daily: { dateKey: string; seed: number; ranked: boolean } | null
+  daily: { dateKey: string; seed: number; ranked: boolean; mutator?: string | null } | null
   /** server-configured portal rules (ad gap etc.) */
   adRules: AdRulesConfig
   events: GameEvents
@@ -79,7 +79,7 @@ export interface BuildCtxOptions {
   adapter?: PortalAdapter // override with a fully-built adapter (tests)
   theme: () => GameThemeMode
   onThemeChange: (cb: (mode: GameThemeMode) => void) => () => void
-  daily?: { dateKey: string; seed: number; ranked: boolean } | null
+  daily?: { dateKey: string; seed: number; ranked: boolean; mutator?: string | null } | null
   adRules?: AdRulesConfig
   events?: GameEvents
 }

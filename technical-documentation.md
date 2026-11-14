@@ -75,8 +75,12 @@ returns the CSPRNG token; NO 18+/rewards coupling), `POST /api/scores`
 Rewards (session required): `POST /api/rewards/{consent,upi,payout}`,
 `GET /api/rewards/{summary,events,payout}`,
 `POST /api/rewards/{session/start (legacy compat → same lib as /api/run/start),heartbeat,run-end}`.
-Daily: `GET /api/daily/{seed,board,summary}`, `POST /api/daily/run`.
+Daily: `GET /api/daily/{seed,board,summary}` (seed also returns the day's
+`mutator` — null for games without a set), `POST /api/daily/run` (plausibility
+ceiling scales by the mutator multiplier, ×1 on classic days).
 Admin (ADMIN role + TOTP 2FA + 1h admin-session cookie):
+`GET /api/admin/stats?days=7|30|90` (retention read-out — DAU/D1 cohorts
+from DailyActivity ∪ DailyRun, no new tracking; v0.12.0),
 `GET|POST /api/admin/{pool,payouts,flags,settings,boards}`,
 `GET /api/admin/{audit,reconciliation}` (+ `?month=`),
 `GET /api/admin/pool/preview`, `GET|POST /api/admin/users[/id]`,
@@ -243,10 +247,26 @@ transitions. Points stay engagement-based; ads never appear in reward flows.
 | `DailyStreak` | per-user consecutive-day streak {current, longest, lastDateKey} |
 | `PortalSetting` | KV overrides: DAILY_TZ (default Asia/Kolkata), interstitial gaps, ad timeout, log cap |
 
-APIs: `GET /api/daily/seed?game=` (server seed; dateKey in configured tz),
+APIs: `GET /api/daily/seed?game=` (server seed; dateKey in configured tz; the
+day's `mutator` id for games with a set — derived server-side from the same
+hash family, zero client trust),
 `POST /api/daily/run` (zod + 12/min/IP rate limit + today-only + plausibility
-vs manifest + seed-match; mismatch ⇒ stored UNRANKED),
+vs manifest × per-mutator multiplier + seed-match; mismatch ⇒ stored UNRANKED),
 `GET /api/daily/board?game=&dateKey=`, `GET /api/daily/summary?game=`.
+
+Mutators (v0.12.0, slice 1 — STACK v1, five): score-rule twists applied in
+the SHIM's summary() so the submitted score already carries the mutator math
+(engine untouched). `mutatorIdFor(slug, dateKey)` = deterministic rotation;
+`applyMutator(id, {score, perfects, bestStreak})` = the transform (mirrored
+in the runner's game-over card); `mutatorPlausibilityMultiplier(id)` scales
+the manifest ceiling (2 on perfect-heavy/combo-hunt, else 1 — never
+tightens). WhatsApp challenge links ride the same daily flow: `wa.me` share
+of score + mutator + `?daily=1` deep link.
+
+Retention read-out (v0.12.0, slice 0): `src/lib/daily/stats.ts` computes
+DAU/D1 cohorts from DailyActivity ∪ DailyRun (guests by name key —
+approximation documented in the module); `GET /api/admin/stats?days=`
+serves it role-guarded to the admin `stats` tab. No new tracking.
 
 Determinism posture (deliberate, documented): the shim seeds Math.random
 during a run — spawn sequences match the day's seed for everyone; frame timing
