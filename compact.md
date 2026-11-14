@@ -1,6 +1,7 @@
 # compact.md — project state snapshot
 
-Last updated: 2026-11-13 (v0.7.1 — security program phase 1: audit + threat model). Read this before working in the repo.
+Last updated: 2026-11-14 (v0.11.0 — post-security growth roadmap, ADR-029,
+docs only). Read this before working in the repo.
 
 ## What this is
 BRUTAL//GAMES — Next.js 16 browser arcade (fan tribute to github.com/ahwootech/BRUTAL):
@@ -178,8 +179,15 @@ NEXT_PUBLIC_ANALYTICS_ENDPOINT/SITE (optional), NEXT_PUBLIC_CONSENT_BANNER
   flags not auto-bans (only auto-HOLD at high risk); engines untouched.
 
 ## Known gaps / next steps
-- Engine migration onto the kit loop (proposed separately — unlocks full
-  determinism + replay verification).
+- **The build queue is docs/roadmap.md (ADR-029)**: slice 0 (DAU/D1/D7
+  admin stats from existing tables) → slice 1 (WhatsApp challenge links +
+  STACK daily mutators with per-mutator plausibility multipliers, build
+  prompt embedded in the roadmap) → lite mode + PWA → festival calendar →
+  cosmetics/shields/goals/leagues/clips → LAST the determinization epic
+  (engine migration onto the kit loop = phase-7 replay verification AND
+  ghost races together). Five gates (G1-G5) sit between phases.
+- Engine migration onto the kit loop (now phase H of the roadmap — unlocks
+  full determinism + replay verification).
 - Poki/CrazyGames stubs must be finished ONLY against their official SDK docs.
 - Standalone per-game export (self-contained dist/<slug>/index.html, <8 MB) —
   phase 6, on request only.

@@ -485,3 +485,38 @@ Observatory are documented as deploy-time steps (they need a public URL).
 Phases 2-6 + 8 are complete; phase 7 (replay verification) stays deferred
 until deterministic engines. Rewards enablement now awaits only the
 program's own decision, with legal/tax sign-off (business-documentation).
+
+## ADR-029 — Post-security growth roadmap: cheap loops first, engine epic last
+
+Date: 2026-11-14 · Status: accepted
+
+**Context.** The security program is complete (v0.10.1, ADR-020…028) and the
+next question is what to build. A growth/retention idea batch (WhatsApp
+challenge links, ghost races, daily mutators, community goals, city leagues,
+PWA/lite mode, festival calendar, cosmetics, clips, i18n, payout-choice
+ideas) is on the table. The codebase facts that shaped this: input logs are
+stored server-side with every daily run (32K cap) but never verified;
+engines have 131 `Math.random`/`Date.now` sites (determinism honestly
+deferred); manifests carry plausibility numbers but no difficulty knobs;
+`navigator.share` already exists in GameStage; no PWA artifacts; no
+user-retention telemetry anywhere.
+
+**Decision.** `docs/roadmap.md` is the master order: slice 0 (retention
+read-out from existing tables — the measurement half of "prove one game"),
+slice 1 (WhatsApp challenge links + daily mutators + D1/D7 stats, build
+prompt embedded), then lite mode + PWA, festival calendar, then new server
+surfaces (goals, leagues), clips, and LAST the determinization epic — one
+engine migration that unlocks phase-7 replay verification AND ghost races
+together. Ghost races therefore do not lead; they ride the epic.
+Five engineering gates between phases (G1 traffic proof via the stats tab +
+analytics events, G2 no new payout surface, G3 no client-authoritative
+state, G4 every new input gets validation/limits/flags in the same PR,
+G5 engines untouched until phase H).
+
+**Consequences.** Rewards-track ideas (past-payouts display, payout choice,
+cosmetics-only referrals) fold into the rewards program docs — no code, no
+cash surface, `REWARDS_ENABLED` stays false. Per-mutator plausibility
+multipliers are load-bearing: a "fast drops" day without them flags honest
+runs as cheaters. The roadmap doc is the queue: each phase is one PR that
+ends with the full docs-discipline update, and the abuse suite must stay
+green after every one of them.

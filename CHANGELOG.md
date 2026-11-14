@@ -3,6 +3,31 @@
 All notable changes to BRUTAL//GAMES. Dates are UTC. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions are ours, not semver-strict.
 
+## [0.11.0] — 2026-11-14
+
+### Planning — post-security growth roadmap (docs only)
+
+The next build queue after security v0.10.1: `docs/roadmap.md` + ADR-029.
+Sequencing principle: cheap loops first, expensive rails last.
+
+- **Slice 0** — retention read-out (DAU/D1/D7) computed server-side from
+  existing `DailyActivity`/`DailyRun` tables; new admin `stats` tab. No new
+  tracking. This is the measurement half of "prove one game first".
+- **Slice 1 (build prompt embedded in the roadmap)** — WhatsApp challenge
+  links (`wa.me` deep links, extending the existing `navigator.share` flow),
+  daily mutators for STACK derived server-side from the seed hash with
+  per-mutator plausibility multipliers, and the D1/D7 stats tab.
+- Then: lite mode + PWA (offline runs structurally unrankable — no signed
+  run token), festival calendar reusing the mutator system, cosmetics,
+  streak shields, community goals (validated-scores-only counter), city
+  leagues, highlight clips.
+- **Phase H last**: the determinization epic — engines onto the kit's
+  fixed-timestep loop, unlocking phase-7 replay verification (stored input
+  logs become the judge) AND ghost races in one epic.
+- Five gates between phases (traffic proof, no new payout surface, no
+  client-authoritative state, validation with every new input, engines
+  untouched until H); rewards ideas stay docs-only, `REWARDS_ENABLED=false`.
+
 ## [0.10.1] — 2026-11-13
 
 ### Security — hardening program phase 8 (abuse suite, scans, red team) — the final gate

@@ -277,3 +277,18 @@ Play click — first paint ships zero game code.
   lastDateKey}, not day-sets).
 - Poki/CrazyGames stubs are unimplemented by policy until their official docs
   are consulted.
+
+## Post-security roadmap (v0.11.0)
+
+The build queue after security v0.10.1 lives in
+[docs/roadmap.md](docs/roadmap.md) (ADR-029): slice 0 — retention read-out
+(DAU/D1/D7 from existing `DailyActivity`/`DailyRun` tables, new
+`GET /api/admin/stats` + admin `stats` tab, no new tracking); slice 1 —
+WhatsApp challenge links (`wa.me` deep links extending the existing
+`navigator.share` flow) + STACK daily mutators derived server-side from the
+seed hash (per-mutator plausibility multipliers in the manifest — a
+"fast drops" day without them flags honest runs); then lite mode + PWA,
+festival calendar, goals/leagues/clips, and last the determinization epic
+(engines onto the kit's fixed-timestep loop = phase-7 replay verification
++ ghost races). Engineering gates G1-G5 sit between phases; the abuse suite
+must stay green after every one.

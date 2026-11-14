@@ -119,3 +119,21 @@ Portal readiness for ad networks (when revenue is planned):
    share_click, ad_shown, ad_failed).
 5. Interstitial policy is already enforced in code (natural breaks, 90 s gap,
    first-minute block, 5 s timeout) — configure gaps via PortalSetting.
+
+
+## Post-security growth roadmap (v0.11.0)
+
+The growth/retention build queue is [docs/roadmap.md](docs/roadmap.md)
+(ADR-029). Rewards-track implications settled there:
+
+- "Past payouts only" display (₹X to Y players last month) reads from the
+  existing locked MonthlyPool/PayoutRequest tables via reconciliation —
+  never projected earnings.
+- Payout choice (cash / voucher / donate) stays parked until the CA/tax
+  sign-off in the pre-payouts checklist; it reduces UPI review load but adds
+  no new cash surface before then.
+- Referral rewards are cosmetics/streak-shields only, never cash (gate G2 —
+  multi-account farming economics; UPI uniqueness + fingerprints already
+  defend that surface).
+- `REWARDS_ENABLED` stays false through all of it; community goals, leagues
+  and cosmetics carry no money by design.

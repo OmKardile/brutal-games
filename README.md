@@ -136,6 +136,7 @@ QA.md               pre-ship checklist (run before any game ships)
 - [docs/threat-model.md](docs/threat-model.md) — security threat model + phased hardening plan
 - [docs/anti-cheat.md](docs/anti-cheat.md) — anti-cheat layers A-F: architecture + operations runbook
 - [docs/incident-runbook.md](docs/incident-runbook.md) — security incident playbook (freeze, rotate, communicate)
+- [docs/roadmap.md](docs/roadmap.md) — post-security growth/retention build queue (ADR-029)
 - [SECURITY.md](SECURITY.md) — security controls overview, PR review checklist, disclosure contact
 - [decisions.md](decisions.md) — architecture decision records
 - [help.md](help.md) — player & admin FAQ
