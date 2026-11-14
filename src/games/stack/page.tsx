@@ -27,7 +27,7 @@ import {
   type BoardResult,
 } from '@/lib/scores-client'
 import { beginRun, endRun } from '@/lib/run-session-client'
-import { mutatorFor, applyMutator, type DailyMutator } from '@/lib/daily/mutators'
+import { mutatorMeta, applyMutator, type DailyMutator } from '@/lib/daily/mutators'
 import { RankAuthHint } from '@/components/portal/RankAuthHint'
 import {
   ArrowLeft,
@@ -169,9 +169,15 @@ export default function StackRunner({ stage }: { stage?: StageProps }) {
         onGameEvent: (ev) => handleEvent(ev as StackEvent),
       },
     })
-    // reflect the day's mutator in the runner (label + live score shape)
-    const mut = stage?.daily?.mutator ? mutatorFor('stack', stage.daily.mutator) : null
-    setMutator(mut && mut.id !== 'none' ? mut : null)
+    // reflect the day's mutator in the runner (label + live score shape);
+    // festival mutators resolve through mutatorMeta (slice 3)
+    const mutId = stage?.daily?.mutator
+    if (mutId && mutId !== 'none') {
+      const meta = mutatorMeta('stack', mutId)
+      setMutator({ id: mutId, label: meta.label, rule: meta.rule })
+    } else {
+      setMutator(null)
+    }
     const handle = createGame(ctx)
     engineRef.current = handle
     handle.setTheme(theme)

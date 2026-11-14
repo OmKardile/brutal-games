@@ -21,6 +21,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: absUrl(`${BASE_PATH}/`), changeFrequency: 'weekly', priority: 1 },
     { url: absUrl(`${BASE_PATH}/games`), changeFrequency: 'weekly', priority: 0.95 },
     { url: absUrl(`${BASE_PATH}/daily`), changeFrequency: 'daily', priority: 0.8 },
+    { url: absUrl(`${BASE_PATH}/daily/festivals`), changeFrequency: 'weekly', priority: 0.6 },
     { url: absUrl(`${BASE_PATH}/about`), changeFrequency: 'yearly', priority: 0.4 },
     { url: absUrl(`${BASE_PATH}/help`), changeFrequency: 'monthly', priority: 0.5 },
     { url: absUrl(`${BASE_PATH}/contact`), changeFrequency: 'yearly', priority: 0.3 },

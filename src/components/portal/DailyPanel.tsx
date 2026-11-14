@@ -61,7 +61,7 @@ export function DailyPanel() {
 
   return (
     <div>
-      {/* streak banner */}
+      {/* streak banner + festival calendar link (roadmap slice 3) */}
       <div className="mt-6 flex flex-wrap items-center gap-4 rounded-lg border border-amber-900/50 bg-amber-950/20 p-4">
         <Flame className="h-6 w-6 text-amber-500" />
         <div>
@@ -80,6 +80,12 @@ export function DailyPanel() {
             <div className="font-mono text-xs text-[var(--ink-dim)]">{dateKey}</div>
           </div>
         )}
+        <Link
+          href="/daily/festivals"
+          className="rounded border border-fuchsia-700/60 bg-fuchsia-950/30 px-3 py-1.5 text-[9px] font-black tracking-[0.3em] text-fuchsia-300 transition-colors hover:bg-fuchsia-900/40"
+        >
+          FESTIVAL CALENDAR
+        </Link>
       </div>
 
       {/* per-game rows */}

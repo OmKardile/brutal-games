@@ -3,6 +3,33 @@
 All notable changes to BRUTAL//GAMES. Dates are UTC. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions are ours, not semver-strict.
 
+## [0.14.0] — 2026-11-14
+
+### Growth roadmap slice 3 (ADR-029): festival calendar + seasonal SEO page
+
+- `src/lib/daily/festival.ts`: fixed-Gregorian-window festivals (2026 dates —
+  Independence Day, Ganesh Chaturthi, Navratri, Diwali, year-end, Holi
+  2027) each carrying themed bonus mutators (FESTIVAL OF LIGHTS, TRICOLOR
+  RUN, NINE NIGHTS, …) with declared plausibility multipliers. Zero storage:
+  everything derives from dateKey at request time; no real tournament/team/
+  player names or logos (trademark guard, test-pinned word-bounded).
+- During a window the festival mutator OVERRIDES the plain STACK rotation
+  (`mutatorIdFor` festival branch); the day's pick rotates deterministically
+  inside the window. Transforms in the shim (engine untouched) +
+  `mutatorPlausibilityMultiplier` reads the festival-declared value.
+- `/api/daily/seed` now returns `festival` meta (name/tag/day N of M) — the
+  GameStage banner shows the festival tag, challenge texts carry the festival
+  name, and the runner HUD/game-over resolve festival labels via
+  `mutatorMeta`.
+- **`/daily/festivals` SEO page** (SSG): the whole calendar, unique copy per
+  festival, live-now highlighting, ItemList + BreadcrumbList JSON-LD,
+  sitemap entry. Linked from the /daily streak banner.
+- Tests: `tests/festival.test.ts` (10) — window edges (inclusive),
+  day-derivation determinism + in-window rotation, override beats the plain
+  rotation, festivalsInRange, themed transform math, multipliers match the
+  declared values, trademark guard, mutatorMeta resolution. Suite: 256
+  pass; abuse suite green against the fresh build.
+
 ## [0.13.0] — 2026-11-14
 
 ### Growth roadmap slice 2 (ADR-029): lite mode + installable PWA

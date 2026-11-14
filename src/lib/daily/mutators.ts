@@ -16,6 +16,7 @@
 // migration (roadmap phase H).
 
 import { hashString } from '@/game-kit/rng'
+import { festivalFor, FESTIVALS } from './festival'
 
 export interface DailyMutator {
   /** stable machine id (stored in URLs/APIs, never localized) */
@@ -84,11 +85,38 @@ export function mutatorFor(slug: string, id: string | null | undefined): DailyMu
  *
  * The classic `none` mutator is deliberately part of the rotation: most days
  * should feel normal, mutator days are the seasoning, not the meal.
+ *
+ * FESTIVAL OVERRIDE (roadmap slice 3): when a festival is active for the
+ * dateKey, the festival's themed mutator wins for STACK — the seasonal event
+ * replaces the plain rotation for the window's duration.
  */
 export function mutatorIdFor(slug: string, dateKey: string): string {
   if (!(slug in MUTATORS_BY_GAME)) return 'none'
+  if (slug === 'stack') {
+    const festival = festivalFor(dateKey)
+    if (festival) return festival.mutator.id
+  }
   const hash = hashString(`${slug}:mutator:${dateKey}:daily`)
   return MUTATORS_BY_GAME[slug][hash % MUTATORS_BY_GAME[slug].length].id
+}
+
+/** Resolve any mutator id (base set OR festival set) to label + rule. */
+export function mutatorMeta(slug: string, id: string): { label: string; rule: string } {
+  if (slug === 'stack') {
+    const festival = festivalForTodayFor(id)
+    if (festival) return { label: festival.label, rule: festival.rule }
+  }
+  const m = mutatorFor(slug, id)
+  return { label: m.label, rule: m.rule }
+}
+
+/** Find a festival mutator by id across all festivals (label/rule lookup). */
+function festivalForTodayFor(id: string): { label: string; rule: string } | null {
+  for (const f of FESTIVALS) {
+    const hit = f.mutators.find((m) => m.id === id)
+    if (hit) return { label: hit.label, rule: hit.rule }
+  }
+  return null
 }
 
 /**
@@ -115,6 +143,20 @@ export function applyMutator(mutatorId: string, summary: { score: number; perfec
     case 'combo-hunt':
       // all-round: perfects + best streak, no raw height
       return summary.perfects + summary.bestStreak
+    // ---- festival mutators (roadmap slice 3) — themed transforms ----
+    case 'festival-diwali-lights':
+      return summary.score + summary.perfects * 2
+    case 'festival-diwali-rockets':
+      return summary.score + summary.bestStreak * 3
+    case 'festival-holi-colors':
+      return summary.perfects + summary.bestStreak
+    case 'festival-navratri-nine':
+      // every 9th block double: floor(score/9) extra
+      return summary.score + Math.floor(summary.score / 9)
+    case 'festival-independence-tricolor':
+      return summary.score + summary.perfects * 2
+    case 'festival-ganesh-modak':
+      return summary.score + summary.perfects * 2
     default:
       return summary.score
   }
@@ -139,7 +181,11 @@ export function mutatorPlausibilityMultiplier(mutatorId: string): number {
       return 1
     case 'combo-hunt':
       return 2
-    default:
-      return 1
+    // festival mutators declare their own multipliers (festival.ts) —
+    // read the canonical value so the two sources can never drift
+    default: {
+      const festival = FESTIVALS.flatMap((f) => f.mutators).find((m) => m.id === mutatorId)
+      return festival?.multiplier ?? 1
+    }
   }
 }

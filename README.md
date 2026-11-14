@@ -20,7 +20,9 @@ Daily challenges (`/daily`): same seed for everyone that day, per-game daily lea
 streaks, Wordle-style share, WhatsApp challenge links (`?daily=1` deep link — same
 seed for the recipient) and daily mutators for STACK (server-derived score-rule
 twists like PERFECT HEAVY or STREAK MASTER; the plausibility ceiling scales with
-them so honest runs are never flagged). Admins get a retention read-out
+them so honest runs are never flagged). Festival calendar
+(`/daily/festivals`): themed daily challenges for Diwali, Holi, Navratri, Ganesh
+Chaturthi and Independence Day. Admins get a retention read-out
 (DAU/D1 cohorts) computed from existing tables — no new tracking.
 
 India-first performance: **lite mode** auto-detects devices that can't hold ~50fps and

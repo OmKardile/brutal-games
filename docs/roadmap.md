@@ -81,7 +81,7 @@ installable (manifest + icons + service-worker app shell); offline run =
 UNRANKED, no new fraud surface (offline runs cannot obtain server-signed run
 tokens — structurally unrankable). Web push stays out of this slice.
 
-### Slice 3 — Festival calendar + seasonal SEO pages (~1–2 days, India-first)
+### Slice 3 — Festival calendar + seasonal SEO pages (~1–2 days, India-first) — SHIPPED v0.14.0
 
 Diwali/Holi/Navratri/Ganesh Chaturthi/Independence Day. Reuses the slice-1
 mutator system (calendar-driven mutator sets + themed titles). No real

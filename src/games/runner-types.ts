@@ -14,6 +14,14 @@ export interface DailyInfo {
    * seed; null when the game has no mutator set. Label lookup: mutatorFor().
    */
   mutator?: string | null
+  /** festival window meta when one is active (roadmap slice 3) */
+  festival?: {
+    id: string
+    name: string
+    tag: string
+    dayIndex: number
+    totalDays: number
+  } | null
 }
 
 export interface StageProps {

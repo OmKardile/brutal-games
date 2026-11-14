@@ -263,6 +263,14 @@ the manifest ceiling (2 on perfect-heavy/combo-hunt, else 1 — never
 tightens). WhatsApp challenge links ride the same daily flow: `wa.me` share
 of score + mutator + `?daily=1` deep link.
 
+Festival calendar (v0.14.0, slice 3): `src/lib/daily/festival.ts` — fixed
+Gregorian windows (2026 dates; 2027 Holi included) with themed mutator sets
+that OVERRIDE the STACK rotation inside a window (day-of-festival
+derivation); `/api/daily/seed` returns festival meta; `/daily/festivals`
+SSG page (ItemList + BreadcrumbList JSON-LD, sitemap entry) lists the
+calendar with live-now highlighting. Trademark guard: no real
+tournament/team/player names (test-pinned, word-bounded).
+
 Retention read-out (v0.12.0, slice 0): `src/lib/daily/stats.ts` computes
 DAU/D1 cohorts from DailyActivity ∪ DailyRun (guests by name key —
 approximation documented in the module); `GET /api/admin/stats?days=`
@@ -298,7 +306,7 @@ Play click — first paint ships zero game code.
 - Poki/CrazyGames stubs are unimplemented by policy until their official docs
   are consulted.
 
-## Post-security roadmap (v0.11.0; slices 0-2 shipped by v0.13.0)
+## Post-security roadmap (v0.11.0; slices 0-3 shipped by v0.14.0)
 
 The build queue after security v0.10.1 lives in
 [docs/roadmap.md](docs/roadmap.md) (ADR-029): slice 0 — retention read-out
@@ -313,8 +321,9 @@ festival calendar, goals/leagues/clips, and last the determinization epic
 + ghost races). Engineering gates G1-G5 sit between phases; the abuse suite
 must stay green after every one.
 
-**Shipped since:** v0.12.0 (slices 0+1 — see the daily section above) and
-v0.13.0 (slice 2):
+**Shipped since:** v0.12.0 (slices 0+1 — see the daily section above),
+v0.13.0 (slice 2) and v0.14.0 (slice 3 — festival calendar, see the daily
+section above):
 
 - **Lite mode** — `src/game-kit/quality.ts` `QualityMonitor`: production FPS
   EMA over rAF, ≥150-sample verdict, 8s cooldown, one-way tiers (0 FULL /

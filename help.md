@@ -125,6 +125,13 @@ similar. The mutator is derived from the day's seed server-side, so everyone
 plays the same twist. The label shows in-game and on the daily banner, and the
 scoring ceiling scales with it — an honest great run is never flagged.
 
+**What are festival challenges?**
+During Diwali, Holi, Navratri, Ganesh Chaturthi, Independence Day and the
+year-end week, the STACK daily swaps its mutator for themed ones (FESTIVAL OF
+LIGHTS, TRICOLOR RUN…). The calendar is on /daily/festivals — the whole
+festival window plays the same seasonal twist each day. Free, same seed for
+everyone, leaderboards stay honest.
+
 **How do I challenge a friend?**
 Finish a daily run and hit CHALLENGE A FRIEND — WhatsApp opens with your
 score, the day's mutator and a link that opens the SAME seeded challenge for
