@@ -46,7 +46,7 @@ exception and it is engine work by definition.
 
 ## The sequence
 
-### Slice 0 — Retention read-out (prereq, ~0.5–1 day)
+### Slice 0 — Retention read-out (prereq, ~0.5–1 day) — SHIPPED v0.12.0
 
 Why first: "prove one game" (the core thesis) needs its measurement half.
 Today no user-retention telemetry exists anywhere in the repo.
@@ -61,14 +61,20 @@ Today no user-retention telemetry exists anywhere in the repo.
   gate G4 applies to admin surfaces too).
 - Exit: admin can see DAU/D1/D7 for the trailing 30 days.
 
-### Slice 1 — Growth loop: WhatsApp challenge links + daily mutators (see build prompt below, ~1–2 days)
+### Slice 1 — Growth loop: WhatsApp challenge links + daily mutators (see build prompt below, ~1–2 days) — SHIPPED v0.12.0
 
 Exit: wa.me share works from a finished daily run; one game (the flagship —
 STACK, broadest audience, most determinism-independent) runs mutators with
 per-mutator plausibility multipliers; share_click shows up in analytics; D1
 baseline visible in the stats tab.
 
-### Slice 2 — India-first performance (lite mode + PWA install, ~2–3 days)
+### Slice 2 — India-first performance (lite mode + PWA install, ~2–3 days) — SHIPPED v0.13.0
+
+Shipped shape: QualityMonitor degrades PAGE effects only (engines off-limits
+in v1 — they own their particles/DPR; `[data-quality]` CSS kill-switches +
+QUALITY toggle, DPR caps staged for phase H). PWA: manifest + app-shell SW
+(API never cached; offline runs structurally unrankable), offline.html
+fallback, generated icons, production-only registration.
 
 Exit: FPS watcher auto-drops quality tier (particles/shake/DPR/resolution);
 installable (manifest + icons + service-worker app shell); offline run =

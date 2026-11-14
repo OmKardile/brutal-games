@@ -23,6 +23,14 @@ twists like PERFECT HEAVY or STREAK MASTER; the plausibility ceiling scales with
 them so honest runs are never flagged). Admins get a retention read-out
 (DAU/D1 cohorts) computed from existing tables — no new tracking.
 
+India-first performance: **lite mode** auto-detects devices that can't hold ~50fps and
+drops page effects (animations, blurs) — engines untouched; a QUALITY toggle lets you
+pin AUTO / LITE / FULL. The site is an **installable PWA**: install it from the
+browser (Android Chrome shows INSTALL APP; iOS: Share → Add to Home Screen), the
+app shell precaches, and any game you've played loads **offline** — offline daily runs
+play on a local seed and stay UNRANKED, so the boards stay honest. Data-friendly by
+design: games load only when you press PLAY.
+
 Plus an optional rewards program: players earn points for genuine play and receive a
 proportional share of a monthly revenue pool. Rewards: `/rewards` (needs an account).
 

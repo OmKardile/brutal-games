@@ -1,8 +1,7 @@
 # compact.md — project state snapshot
 
-Last updated: 2026-11-14 (v0.12.0 — growth slices 0+1: retention read-out +
-WhatsApp challenge loop + STACK daily mutators, ADR-029). Read this before
-working in the repo.
+Last updated: 2026-11-14 (v0.13.0 — slice 2: lite mode + installable PWA,
+ADR-029). Read this before working in the repo.
 
 ## What this is
 BRUTAL//GAMES — Next.js 16 browser arcade (fan tribute to github.com/ahwootech/BRUTAL):
@@ -197,13 +196,22 @@ NEXT_PUBLIC_ANALYTICS_ENDPOINT/SITE (optional), NEXT_PUBLIC_CONSENT_BANNER
   flags not auto-bans (only auto-HOLD at high risk); engines untouched.
 
 ## Known gaps / next steps
-- **The build queue is docs/roadmap.md (ADR-029)**: slices 0+1 SHIPPED
-  (v0.12.0 — stats read-out, WhatsApp challenge links, STACK mutators) →
-  next: slice 2 (lite mode + PWA) → slice 3 (festival calendar reusing the
-  mutator system) → cosmetics/shields/goals/leagues/clips → LAST the
-  determinization epic (engine migration onto the kit loop = phase-7 replay
-  verification AND ghost races together). Five gates (G1-G5) sit between
-  phases; G1 traffic proof now has its instrument (the stats tab).
+- **The build queue is docs/roadmap.md (ADR-029)**: slices 0-2 SHIPPED
+  (v0.12.0 stats read-out + WhatsApp challenge links + STACK mutators;
+  v0.13.0 lite mode + PWA) → next: slice 3 (festival calendar reusing the
+  mutator system + seasonal SEO pages) → cosmetics/shields/goals/leagues/
+  clips → LAST the determinization epic (engine migration onto the kit loop
+  = phase-7 replay verification AND ghost races together). Five gates
+  (G1-G5) sit between phases; G1 traffic proof now has its instrument
+  (the stats tab).
+- **Lite mode (v0.13.0)**: game-kit/quality.ts QualityMonitor (production
+  FPS EMA, one-way tiers, 8s cooldown) degrades PAGE effects only via
+  [data-quality] CSS kill-switches — engines untouched. QUALITY toggle in
+  GameStage (auto/lite/off, localStorage). dprCapFor() awaits phase H.
+- **PWA (v0.13.0)**: manifest + sw.js (app-shell precache, runtime chunks,
+  API NEVER cached — offline runs stay structurally unrankable) +
+  offline.html fallback + icons via scripts/gen-pwa-icons.ts. SW registers
+  in production only (PwaRegister). CSP already allows 'self' SW/manifest.
 - Engine migration onto the kit loop (now phase H of the roadmap — unlocks
   full determinism + replay verification).
 - Poki/CrazyGames stubs must be finished ONLY against their official SDK docs.

@@ -22,6 +22,7 @@ import {
   PerfOverlay,
   createInputRecorder,
   hashString,
+  QualityMonitor,
   type InputRecorder,
   type RunSummary,
 } from '@/game-kit'
@@ -322,6 +323,33 @@ export function GameStage(props: GameStageProps) {
     return () => overlay.destroy()
   }, [mode])
 
+  // lite mode (roadmap slice 2): production FPS watcher. Degrades PAGE
+  // effects (never engine internals — house rule) when the device cannot
+  // hold ~50fps. data-quality on <html> drives the CSS kill-switches;
+  // the QUALITY button cycles auto → lite → off (persisted).
+  const qualityRef = useRef<QualityMonitor | null>(null)
+  const [qualityMode, setQualityMode] = useState<'auto' | 'lite' | 'off'>('auto')
+
+  useEffect(() => {
+    if (mode !== 'playing') return
+    const mon = new QualityMonitor((tier) => {
+      document.documentElement.dataset.quality = tier === 0 ? 'full' : tier === 1 ? 'lite' : 'ultra'
+    })
+    qualityRef.current = mon
+    setQualityMode(mon.state.mode)
+    mon.start()
+    return () => {
+      mon.destroy()
+      qualityRef.current = null
+      delete document.documentElement.dataset.quality
+    }
+  }, [mode])
+
+  const cycleQuality = useCallback(() => {
+    const next = qualityRef.current?.cycleMode()
+    if (next) setQualityMode(next)
+  }, [])
+
   const toggleFullscreen = useCallback(() => {
     setFullscreen((f) => {
       const next = !f
@@ -496,6 +524,18 @@ export function GameStage(props: GameStageProps) {
 
       {/* stage chrome */}
       <div className="absolute right-2 top-2 z-40 flex gap-2">
+        <Button
+          size="icon"
+          variant="outline"
+          className={`h-8 w-8 border-[var(--line-strong)] bg-[var(--panel)] text-[9px] font-black tracking-tighter ${
+            qualityMode === 'lite' ? 'text-emerald-400' : 'text-[var(--ink-dim)] hover:text-[var(--ink)]'
+          }`}
+          onClick={cycleQuality}
+          aria-label={`Quality mode: ${qualityMode}. Click to change.`}
+          title={`QUALITY: ${qualityMode.toUpperCase()} (auto-degrades on slow devices)`}
+        >
+          {qualityMode === 'lite' ? 'LITE' : qualityMode === 'off' ? 'FULL' : 'AUTO'}
+        </Button>
         <Button
           size="icon"
           variant="outline"

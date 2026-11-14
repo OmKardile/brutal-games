@@ -298,7 +298,7 @@ Play click — first paint ships zero game code.
 - Poki/CrazyGames stubs are unimplemented by policy until their official docs
   are consulted.
 
-## Post-security roadmap (v0.11.0)
+## Post-security roadmap (v0.11.0; slices 0-2 shipped by v0.13.0)
 
 The build queue after security v0.10.1 lives in
 [docs/roadmap.md](docs/roadmap.md) (ADR-029): slice 0 — retention read-out
@@ -312,3 +312,21 @@ festival calendar, goals/leagues/clips, and last the determinization epic
 (engines onto the kit's fixed-timestep loop = phase-7 replay verification
 + ghost races). Engineering gates G1-G5 sit between phases; the abuse suite
 must stay green after every one.
+
+**Shipped since:** v0.12.0 (slices 0+1 — see the daily section above) and
+v0.13.0 (slice 2):
+
+- **Lite mode** — `src/game-kit/quality.ts` `QualityMonitor`: production FPS
+  EMA over rAF, ≥150-sample verdict, 8s cooldown, one-way tiers (0 FULL /
+  1 LITE / 2 ULTRA). Degrades PAGE effects only via `[data-quality]` CSS
+  kill-switches in globals.css (engines untouched — house rule). QUALITY
+  toggle in GameStage cycles auto/lite/off (localStorage `brutal.quality`).
+  `dprCapFor(tier)` (2/1.5/1) is ready for kit-native games in phase H.
+- **PWA** — `public/manifest.json` + `public/sw.js` (app-shell precache,
+  runtime cache for `/_next/` chunks so played games load offline, API routes
+  NEVER cached, POSTs bypass, versioned cache names) + `public/offline.html`
+  navigation fallback + icons from `scripts/gen-pwa-icons.ts`.
+  `PwaRegister` registers the SW in production only. Offline daily runs play
+  on local seeds as UNRANKED and cannot obtain server-signed run tokens —
+  structurally unrankable, no new fraud surface. CSP (middleware) already
+  permits same-origin SW + manifest.

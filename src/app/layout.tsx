@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/lib/theme";
 import { ConsentBanner } from "@/components/portal/ConsentBanner";
+import { PwaRegister } from "@/components/portal/PwaRegister";
 import { SITE_URL } from "@/lib/site";
 
 const geistSans = Geist({
@@ -48,7 +49,9 @@ export const metadata: Metadata = {
   ],
   icons: {
     icon: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/logo.svg`,
+    apple: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/icons/icon-192.png`,
   },
+  manifest: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/manifest.json`,
   openGraph: {
     title: "BRUTAL//GAMES — stop reading, start playing",
     description:
@@ -76,6 +79,7 @@ export default function RootLayout({
       >
         <ThemeProvider>{children}</ThemeProvider>
         <ConsentBanner />
+        <PwaRegister />
         <Toaster />
       </body>
     </html>

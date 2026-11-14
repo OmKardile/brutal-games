@@ -134,7 +134,16 @@ them. Same seed, same rules: the score gap is pure skill.
 Games load ONLY when you press PLAY (that's by design — the page stays light).
 If it's still slow: close heavy tabs, avoid low-power mode, try day mode, or
 add ?perf=1 to the URL to see the fps overlay. On mobile, use the fullscreen
-button in the top-right of the game.
+button in the top-right of the game. The site also auto-detects slow devices
+(LITE mode — page animations switch off to save frames); the QUALITY button
+in-game lets you pin AUTO / LITE / FULL.
+
+**Can I play offline / install it?**
+Yes: install the arcade from your browser (Android Chrome: the INSTALL APP
+button; iOS Safari: Share → Add to Home Screen). The app shell caches, and
+any game you've already played loads offline. Offline daily runs use a local
+seed and count as UNRANKED — leaderboards stay honest. Boards and accounts
+need a connection; the games don't.
 
 **Where did /play and /stack go?**
 They moved to /games/arena and /games/stack (plus /games/reflex, /games/dodge,

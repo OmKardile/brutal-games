@@ -176,4 +176,12 @@ export {
 } from './juice'
 export { Pool } from './pool'
 export { PerfOverlay } from './perf'
+export {
+  QualityMonitor,
+  dprCapFor,
+  readQualityMode,
+  writeQualityMode,
+  type QualityState,
+  type QualityTier,
+} from './quality'
 export { createInputRecorder, type InputRecorder } from './input-log'

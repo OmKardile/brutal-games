@@ -393,3 +393,35 @@ html {
   0% { transform: translateX(-120%); }
   100% { transform: translateX(360%); }
 }
+
+/* ------------------------------------------------------------------
+   lite mode (roadmap slice 2) — page-effect kill-switches.
+   data-quality is set by GameStage's QualityMonitor: a device that cannot
+   hold ~50fps drops to "lite" (then "ultra"). Engine canvases are untouched
+   (house rule); these selectors kill the PORTAL's own compositing cost:
+   scan lines, grain, float/flicker/glow/chip loops, breathing SVG, hero
+   parallax. prefers-reduced-motion already collapses most motion — this is
+   the performance (not accessibility) side of the same idea.
+------------------------------------------------------------------- */
+[data-quality='lite'] .brutal-scan,
+[data-quality='lite'] .brutal-grain,
+[data-quality='lite'] .brutal-float,
+[data-quality='lite'] .brutal-flicker,
+[data-quality='lite'] .brutal-glow,
+[data-quality='lite'] .brutal-chip,
+[data-quality='lite'] .z-breathe,
+[data-quality='ultra'] .brutal-scan,
+[data-quality='ultra'] .brutal-grain,
+[data-quality='ultra'] .brutal-float,
+[data-quality='ultra'] .brutal-flicker,
+[data-quality='ultra'] .brutal-glow,
+[data-quality='ultra'] .brutal-chip,
+[data-quality='ultra'] .z-breathe {
+  animation: none !important;
+}
+
+/* blur/backdrop filters are the other silent frame-eaters on low-end GPUs */
+[data-quality='lite'] [class*='backdrop-blur'],
+[data-quality='ultra'] [class*='backdrop-blur'] {
+  backdrop-filter: none !important;
+}
